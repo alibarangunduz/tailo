@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MasterCV {
+  id        String   @id @default(cuid())
+  name      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tailoredVersions TailoredCV[]
+}
+
+model TailoredCV {
+  id               String   @id @default(cuid())
+  masterCVId       String
+  masterCV         MasterCV @relation(fields: [masterCVId], references: [id])
+  jobTitle         String
+  company          String
+  jobDescription   String   @db.Text
+  tailoredContent  String   @db.Text
+  matchScore       Int
+  gapAnalysis      String   @db.Text
+  strengthAnalysis String   @db.Text
+  createdAt        DateTime @default(now())
+}
