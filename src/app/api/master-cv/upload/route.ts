@@ -1,18 +1,17 @@
 import { parsePDF } from '@/lib/pdf-parser';
-import { prisma } from '@/lib/db';
 
+// Parses an uploaded PDF and returns its text. Does not persist anything;
+// the caller saves the master CV explicitly via POST/PUT /api/master-cv.
 export async function POST(req: Request) {
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
-  const name = formData.get('name') as string | null;
 
-  if (!file || !name) {
-    return Response.json({ error: 'Missing file or name' }, { status: 400 });
+  if (!file) {
+    return Response.json({ error: 'Missing file' }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const content = await parsePDF(buffer);
 
-  const cv = await prisma.masterCV.create({ data: { name, content } });
-  return Response.json(cv, { status: 201 });
+  return Response.json({ content });
 }
