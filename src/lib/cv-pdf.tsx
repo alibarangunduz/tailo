@@ -81,6 +81,11 @@ const styles = StyleSheet.create({
   bulletText: { flex: 1, fontSize: 8.5, lineHeight: 1.35 },
 
   paragraph: { fontSize: 9, lineHeight: 1.4, marginBottom: 2 },
+
+  // Projects: name + technologies on one line, description below.
+  project: { fontSize: 8.5, lineHeight: 1.4, marginBottom: 3 },
+  projectName: { fontFamily: 'Helvetica-Bold' },
+  projectTech: { fontFamily: 'Helvetica-Oblique', color: MUTED },
 });
 
 function SectionHeading({ children }: { children: string }) {
@@ -178,8 +183,12 @@ function CVDocument({ result }: { result: TailorResult }) {
           <View>
             <SectionHeading>Projects</SectionHeading>
             {cv.projects.map((p, i) => (
-              <Text key={i} style={styles.paragraph}>
-                {p}
+              <Text key={i} style={styles.project}>
+                <Text style={styles.projectName}>{p.name}</Text>
+                {p.technologies ? (
+                  <Text style={styles.projectTech}>{` (${p.technologies})`}</Text>
+                ) : null}
+                {p.description ? <Text>{` — ${p.description}`}</Text> : null}
               </Text>
             ))}
           </View>
