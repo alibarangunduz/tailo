@@ -13,15 +13,31 @@ highlights your most relevant experience.
 - Reframes bullet points using the language of the job description
 - Scores your match across technical skills, experience, and seniority
 - Flags gaps honestly with actionable suggestions
+- Exports the tailored CV as a one-page, ATS-friendly PDF
 - Stores every version so you can track what you sent where
 
 ## Tech Stack
 
-- **Next.js** + TypeScript (App Router)
-- **Vercel AI SDK** with Claude (Anthropic)
+- **Next.js 16** + TypeScript (App Router)
+- **Vercel AI SDK** with Claude (`claude-sonnet-4-5` via Anthropic)
 - **PostgreSQL** via Neon — generation history and master CV storage
 - **Prisma** ORM
+- **unpdf** — text extraction from uploaded PDF CVs
+- **@react-pdf/renderer** — one-page PDF export
+- **Tailwind CSS** — styling
 - Deployed on **Vercel**
+
+## PDF Export
+
+The result view has a "Download PDF" button that produces a one-page CV
+matching the master CV template: a single-line header with blue links,
+blue section headings with rules, centered underlined company names, and
+italic locations. It is generated client-side, so the output is real
+selectable text that applicant tracking systems (ATS) parse cleanly,
+never a rasterized image.
+
+The layout lives in `src/lib/cv-pdf.tsx`; the contact header (name,
+LinkedIn, phone, website, email) lives in `src/lib/cv-header.ts`.
 
 ## Why I Built This
 
@@ -35,6 +51,9 @@ while keeping the human in control of the final version.
 - [x] Core tailoring: master CV + job description → tailored CV
 - [x] Match scoring and gap analysis
 - [x] Generation history
+- [x] One-page, ATS-friendly PDF export
+- [ ] Embed the exact template fonts (Nunito, Spectral)
+- [ ] Structured education and projects in the data model
 - [ ] Company culture intelligence
 - [ ] Multi-version generation with different strategic angles
 - [ ] Semantic matching for large CVs
@@ -45,12 +64,17 @@ while keeping the human in control of the final version.
 git clone https://github.com/alibarangunduz/tailo.git
 cd tailo
 npm install
-cp .env.example .env.local
-# Add ANTHROPIC_API_KEY and DATABASE_URL
+
+# Create .env.local with your own credentials (it is git-ignored)
+#   ANTHROPIC_API_KEY=your-anthropic-key
+#   DATABASE_URL=your-neon-connection-string   (must include ?sslmode=require)
+
 npx prisma generate
 npx prisma db push
 npm run dev
 ```
+
+Never commit `.env` or `.env.local`. They hold secrets and are git-ignored.
 
 ## License
 

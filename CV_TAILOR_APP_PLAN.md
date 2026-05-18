@@ -4,6 +4,13 @@
 
 An LLM-powered application that takes a user's master CV and a target job description, analyzes the gap between them, and generates a tailored resume that honestly highlights the most relevant experience without fabricating skills.
 
+## Current Status
+
+Phase 1 (MVP) is built and working: master CV upload/paste, job description input,
+Claude-powered tailoring with streaming, match scoring, gap analysis, generation
+history, and a one-page, ATS-friendly PDF export. This document keeps the original
+plan for context; the sections below are updated to match the shipped implementation.
+
 ## Why This Exists
 
 Applying to jobs requires tailoring your CV for each role. Doing this manually takes 30-60 minutes per application. This app automates the first pass: reordering sections, reframing bullet points, surfacing the most relevant experience, and scoring the match, all while respecting the truth of what the user has actually done.
@@ -14,11 +21,13 @@ Applying to jobs requires tailoring your CV for each role. Doing this manually t
 
 | Tool | Purpose |
 |------|---------|
-| Next.js 14+ (App Router) | Framework, TypeScript |
+| Next.js 16 (App Router) | Framework, TypeScript |
 | Vercel AI SDK | LLM streaming, structured output |
-| Claude API (Anthropic) | LLM provider via Vercel AI SDK |
+| Claude API (Anthropic) | `claude-sonnet-4-5` via Vercel AI SDK |
 | Neon (PostgreSQL) | Database, serverless PostgreSQL |
 | Prisma | ORM, schema management |
+| unpdf | Text extraction from uploaded PDF CVs |
+| @react-pdf/renderer | One-page PDF export of the tailored CV |
 | Tailwind CSS | Styling |
 | Vercel | Deployment |
 
@@ -42,7 +51,7 @@ DATABASE_URL=          # Neon PostgreSQL connection string
    - A tailored CV (restructured, reframed, reordered)
    - A match score with breakdown
    - A gap analysis (what's missing, what's strong)
-5. User views the result, can copy or download
+5. User views the result, copies the text, or exports a one-page PDF
 6. Everything is stored in PostgreSQL for history
 
 ### Database Schema (Prisma)
@@ -76,36 +85,37 @@ model TailoredCV {
 ### Project Structure
 
 ```
-cv-tailor/
-├── app/
-│   ├── layout.tsx
-│   ├── page.tsx                    # Landing / dashboard
-│   ├── tailor/
-│   │   └── page.tsx                # Main tailoring interface
-│   ├── history/
-│   │   └── page.tsx                # Past generations
-│   └── api/
-│       ├── tailor/
-│       │   └── route.ts            # POST: generate tailored CV (streaming)
-│       ├── master-cv/
-│       │   └── route.ts            # CRUD for master CVs
-│       └── history/
-│           └── route.ts            # GET tailored versions
-├── components/
-│   ├── cv-upload.tsx               # PDF upload + text paste
-│   ├── job-description-input.tsx   # Job description paste area
-│   ├── tailored-result.tsx         # Display generated CV
-│   ├── match-score.tsx             # Visual score breakdown
-│   └── gap-analysis.tsx            # What's missing / strong
-├── lib/
-│   ├── db.ts                       # Prisma client
-│   ├── prompts.ts                  # System prompts for Claude
-│   ├── pdf-parser.ts               # PDF to text extraction
-│   └── types.ts                    # TypeScript types
+tailo/
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx                    # Landing / dashboard
+│   │   ├── tailor/
+│   │   │   └── page.tsx                # Main tailoring interface
+│   │   ├── history/
+│   │   │   └── page.tsx                # Past generations
+│   │   └── api/
+│   │       ├── tailor/route.ts         # POST: generate tailored CV (streaming)
+│   │       ├── master-cv/route.ts      # CRUD for master CVs
+│   │       ├── master-cv/upload/route.ts  # PDF upload + text extraction
+│   │       └── history/route.ts        # GET tailored versions
+│   ├── components/
+│   │   ├── cv-upload.tsx               # PDF upload + text paste
+│   │   ├── job-description-input.tsx   # Job description paste area
+│   │   ├── tailored-result.tsx         # Display CV, copy text, download PDF
+│   │   ├── match-score.tsx             # Visual score breakdown
+│   │   └── gap-analysis.tsx            # What's missing / strong
+│   └── lib/
+│       ├── db.ts                       # Prisma client
+│       ├── prompts.ts                  # System prompt for Claude
+│       ├── pdf-parser.ts               # PDF to text extraction (unpdf)
+│       ├── cv-pdf.tsx                  # One-page PDF export (@react-pdf/renderer)
+│       ├── cv-header.ts                # Contact header constants for the PDF
+│       └── types.ts                    # TypeScript types
 ├── prisma/
 │   └── schema.prisma
-├── .env.local
-├── CLAUDE.md                       # Claude Code instructions
+├── .env.local                          # Secrets, git-ignored
+├── AGENTS.md                           # Project guide (CLAUDE.md imports it)
 ├── README.md
 └── package.json
 ```
@@ -122,7 +132,7 @@ export async function POST(req: Request) {
   const { masterCV, jobDescription, company, jobTitle } = await req.json();
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-20250514'),
+    model: anthropic('claude-sonnet-4-5'),
     system: systemPrompt,
     prompt: `
 ## Master CV
@@ -138,9 +148,12 @@ Analyze the gap between this CV and the job description. Then generate a tailore
     `,
   });
 
-  return result.toDataStreamResponse();
+  return result.toTextStreamResponse();
 }
 ```
+
+The shipped route also persists each generation to the database inside the
+`streamText` `onFinish` callback.
 
 ### System Prompt (lib/prompts.ts)
 
@@ -207,18 +220,32 @@ Respond with a JSON object containing these fields:
 }`;
 ```
 
+The live prompt in `src/lib/prompts.ts` also includes an explicit one-page content
+budget (limits on summary length, number of skill categories, and total experience
+bullets) so the generated CV fits the one-page PDF export.
+
 ### PDF Parsing
 
 ```typescript
-// lib/pdf-parser.ts
-// Use pdf-parse package for extracting text from uploaded PDFs
-import pdf from 'pdf-parse';
+// src/lib/pdf-parser.ts
+// Use unpdf to extract text from uploaded PDFs
+import { extractText, getDocumentProxy } from 'unpdf';
 
 export async function parsePDF(buffer: Buffer): Promise<string> {
-  const data = await pdf(buffer);
-  return data.text;
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return text;
 }
 ```
+
+### PDF Export
+
+The tailored CV is exported as a one-page, ATS-friendly PDF with
+`@react-pdf/renderer` (`src/lib/cv-pdf.tsx`). The layout mirrors the user's
+master CV template: a single-line header, blue section headings with rules,
+centered underlined company names, and italic locations. Generation runs
+client-side and is dynamically imported so `@react-pdf/renderer` stays out of
+the SSR and initial bundle. Contact header values live in `src/lib/cv-header.ts`.
 
 ### Key UI Components
 
@@ -227,9 +254,10 @@ export async function parsePDF(buffer: Buffer): Promise<string> {
 - Right panel: Generated result (streams in)
 - Bottom: Match score + gap analysis
 
-**Result Display (components/tailored-result.tsx):**
+**Result Display (src/components/tailored-result.tsx):**
 - Formatted tailored CV
 - Copy to clipboard button
+- Download PDF button (one-page, ATS-friendly export)
 - "Strategy Notes" expandable section explaining what was changed and why
 
 ### Weekend Timeline
@@ -293,6 +321,9 @@ export async function parsePDF(buffer: Buffer): Promise<string> {
 
 ## CLAUDE.md (For Claude Code in VS Code)
 
+> Note: the live project guide now lives in `AGENTS.md`, and `CLAUDE.md` imports it
+> via `@AGENTS.md`. The block below is the original draft, kept for history.
+
 Place this at the project root:
 
 ```markdown
@@ -312,7 +343,7 @@ CV Tailor is an AI-powered resume tailoring app. Users upload a master CV and pa
 - All LLM calls go through Vercel AI SDK streamText(), never raw fetch to Anthropic
 - Database operations use Prisma client from lib/db.ts
 - System prompts live in lib/prompts.ts, never inline in route handlers
-- PDF parsing uses pdf-parse package
+- PDF parsing uses the unpdf package
 - No authentication for MVP (single user)
 - No pgvector for MVP (master CV fits in context window)
 
@@ -345,6 +376,9 @@ CV Tailor is an AI-powered resume tailoring app. Users upload a master CV and pa
 ---
 
 ## README.md Template
+
+> Note: the live `README.md` exists at the project root and is the source of truth.
+> The block below is the original draft.
 
 ```markdown
 # CV Tailor
@@ -412,9 +446,8 @@ MIT
 npx create-next-app@latest cv-tailor --typescript --tailwind --app --src-dir --import-alias "@/*"
 
 # Install dependencies
-cd cv-tailor
-npm install ai @ai-sdk/anthropic prisma @prisma/client pdf-parse
-npm install -D @types/pdf-parse
+cd tailo
+npm install ai @ai-sdk/anthropic prisma @prisma/client unpdf @react-pdf/renderer
 
 # Initialize Prisma
 npx prisma init
