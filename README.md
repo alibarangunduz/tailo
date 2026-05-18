@@ -14,6 +14,7 @@ highlights your most relevant experience.
 - Scores your match across technical skills, experience, and seniority
 - Flags gaps honestly with actionable suggestions
 - Exports the tailored CV as a one-page, ATS-friendly PDF
+- Saves multiple master CVs and switches between them in one click
 - Stores every version so you can track what you sent where
 
 ## Tech Stack
@@ -52,6 +53,7 @@ while keeping the human in control of the final version.
 - [x] Match scoring and gap analysis
 - [x] Generation history
 - [x] One-page, ATS-friendly PDF export
+- [x] Saved master CVs with quick switching, renaming, and deletion
 - [ ] Embed the exact template fonts (Nunito, Spectral)
 - [ ] Structured education and projects in the data model
 - [ ] Company culture intelligence

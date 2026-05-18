@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CV Tailor",
+  title: "CV Tailo",
   description: "AI-powered resume tailoring — honest, reframed, optimized.",
 };
 

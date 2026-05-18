@@ -1,13 +1,15 @@
-import Link from 'next/link';
+import Link from "next/link";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950 px-4">
       <div className="max-w-lg text-center">
-        <h1 className="text-4xl font-bold tracking-tight text-white">CV Tailor</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-white">
+          CV Tailor
+        </h1>
         <p className="mt-4 text-lg text-gray-400">
-          Paste your master CV and a job description. Get a tailored version in seconds — honest,
-          reframed, and optimized for the role.
+          Paste your master CV and a job description. Get a tailored version in
+          seconds — honest, reframed, and optimized for the role.
         </p>
         <div className="mt-8 flex items-center justify-center gap-4">
           <Link

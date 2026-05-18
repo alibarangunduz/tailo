@@ -6,10 +6,11 @@ An LLM-powered application that takes a user's master CV and a target job descri
 
 ## Current Status
 
-Phase 1 (MVP) is built and working: master CV upload/paste, job description input,
-Claude-powered tailoring with streaming, match scoring, gap analysis, generation
-history, and a one-page, ATS-friendly PDF export. This document keeps the original
-plan for context; the sections below are updated to match the shipped implementation.
+Phase 1 (MVP) is built and working: master CV upload/paste, saved master CVs
+(save, switch, rename, delete), job description input, Claude-powered tailoring
+with streaming, match scoring, gap analysis, generation history, and a one-page,
+ATS-friendly PDF export. This document keeps the original plan for context; the
+sections below are updated to match the shipped implementation.
 
 ## Why This Exists
 
@@ -96,8 +97,9 @@ tailo/
 │   │   │   └── page.tsx                # Past generations
 │   │   └── api/
 │   │       ├── tailor/route.ts         # POST: generate tailored CV (streaming)
-│   │       ├── master-cv/route.ts      # CRUD for master CVs
-│   │       ├── master-cv/upload/route.ts  # PDF upload + text extraction
+│   │       ├── master-cv/route.ts      # GET list, POST create, PUT update
+│   │       ├── master-cv/[id]/route.ts # GET one, DELETE one (cascades tailored CVs)
+│   │       ├── master-cv/upload/route.ts  # PDF text extraction (no persistence)
 │   │       └── history/route.ts        # GET tailored versions
 │   ├── components/
 │   │   ├── cv-upload.tsx               # PDF upload + text paste

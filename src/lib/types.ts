@@ -42,6 +42,13 @@ export interface TailoredCVContent {
   projects: string[];
 }
 
+export interface MasterCVSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TailorResult {
   matchScore: number;
   scoreBreakdown: ScoreBreakdown;
