@@ -34,12 +34,18 @@ export interface ExperienceEntry {
   subsections: ExperienceSubsection[];
 }
 
+export interface ProjectEntry {
+  name: string;
+  technologies: string;
+  description: string;
+}
+
 export interface TailoredCVContent {
   summary: string;
   skills: SkillCategory[];
   experience: ExperienceEntry[];
   education: string;
-  projects: string[];
+  projects: ProjectEntry[];
 }
 
 export interface MasterCVSummary {

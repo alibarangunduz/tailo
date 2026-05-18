@@ -64,7 +64,13 @@ Respond with a JSON object containing these fields:
       }
     ],
     "education": "<one-line education>",
-    "projects": []
+    "projects": [
+      {
+        "name": "<project name>",
+        "technologies": "<comma-separated technologies>",
+        "description": "<one concise sentence>"
+      }
+    ]
   },
   "strategyNotes": "<brief explanation of what was changed and why, like a cover letter to the candidate>"
 }`;
