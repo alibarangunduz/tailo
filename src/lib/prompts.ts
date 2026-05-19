@@ -16,6 +16,7 @@ Your job is to generate a tailored CV that maximizes the candidate's chances of 
 7. You CAN compress less relevant roles to save space
 8. You MUST keep it to one page worth of content
 9. You SHOULD surface soft signals (location, language skills, certifications) if the job description values them
+10. NEVER describe the candidate as "senior" in the "summary", or otherwise imply senior-level seniority, unless at least one role in "experience" has the word "Senior" in its job title
 
 ## One-Page Budget
 
