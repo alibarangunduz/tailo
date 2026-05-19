@@ -72,6 +72,15 @@ be exported as a one-page, ATS-friendly PDF.
 - `.claude/settings.local.json` and `CV Template Tailo.docx` are git-ignored.
 - Never hardcode API keys or connection strings in source files.
 
+## Git Workflow
+
+- The user often pushes commits themselves, right after they are made. Treat any
+  commit as potentially already on origin.
+- Do not amend or rewrite a commit after creating it, and do not suggest amending
+  it: once it is on origin, rewriting forces a branch divergence that has to be
+  untangled with a force-push.
+- Never force-push without explicit confirmation from the user.
+
 ## Common Pitfalls
 
 - Vercel AI SDK: use `streamText`, not `generateText`, for the tailoring endpoint.
