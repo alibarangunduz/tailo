@@ -25,18 +25,6 @@ const HEADING_BLUE = '#3C78D8'; // section headings
 const RULE_GRAY = '#cfcfcf'; // thin section rule
 const MUTED = '#3a3a3a'; // locations, bullet dots
 
-// US Letter content width (pt): page width minus the fixed left/right padding.
-const CONTENT_WIDTH = 612 - 36 - 32;
-
-// Largest font size in [min, max] at which `text` fits on one line of
-// CONTENT_WIDTH. Helvetica's average glyph advance is roughly 0.55em across
-// mixed prose, close enough to keep a one-line field from wrapping.
-function fitOneLineSize(text: string, max: number, min: number): number {
-  if (!text) return max;
-  if (text.length * max * 0.55 <= CONTENT_WIDTH) return max;
-  return Math.max(min, CONTENT_WIDTH / (text.length * 0.55));
-}
-
 // Built-in Helvetica/Times-Roman only cover Latin-1. Turkish letters outside
 // that range render as a fallback box, so transliterate them to their ASCII
 // base. Temporary until real Unicode fonts are registered (see AGENTS.md).
@@ -289,16 +277,18 @@ function CVDocument({ result, scale }: { result: TailorResult; scale: number }) 
         {cv.education ? (
           <View>
             <SectionHeading styles={styles}>Education</SectionHeading>
-            {/* Education is a single line: shrink the font if needed so it
-                never wraps to a second line. */}
-            <Text
-              style={[
-                styles.paragraph,
-                { fontSize: fitOneLineSize(cv.education, 9 * scale, 6.5) },
-              ]}
-            >
-              {cv.education}
-            </Text>
+            {/* One entry per line (degree first, then exchange, etc.), each at
+                the normal paragraph size. Entries are " | "-separated by the
+                model; the one-page auto-fit keeps the whole CV on one page. */}
+            {cv.education
+              .split(' | ')
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+              .map((entry, i) => (
+                <Text key={i} style={styles.paragraph}>
+                  {entry}
+                </Text>
+              ))}
           </View>
         ) : null}
       </Page>

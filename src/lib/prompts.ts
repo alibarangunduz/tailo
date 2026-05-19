@@ -65,7 +65,7 @@ Respond with a JSON object containing these fields:
         ]
       }
     ],
-    "education": "<one-line education>",
+    "education": "<education; separate distinct entries (degree, exchange, etc.) with ' | '>",
     "projects": [
       {
         "name": "<project name>",
