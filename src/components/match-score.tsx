@@ -31,20 +31,27 @@ export function MatchScore({ score, breakdown }: MatchScoreProps) {
         </div>
       </div>
       <div className="space-y-3">
-        {(Object.keys(labels) as (keyof ScoreBreakdown)[]).map((key) => (
-          <div key={key}>
-            <div className="mb-1 flex justify-between text-xs text-gray-400">
-              <span>{labels[key]}</span>
-              <span>{breakdown[key]}</span>
+        {(Object.keys(labels) as (keyof ScoreBreakdown)[]).map((key) => {
+          const raw = breakdown[key];
+          // The model occasionally omits a sub-score. Treat a missing or
+          // out-of-range value as "no data" instead of a misleading full bar.
+          const hasValue = typeof raw === 'number' && Number.isFinite(raw);
+          const value = hasValue ? Math.max(0, Math.min(100, raw)) : 0;
+          return (
+            <div key={key}>
+              <div className="mb-1 flex justify-between text-xs text-gray-400">
+                <span>{labels[key]}</span>
+                <span>{hasValue ? value : '—'}</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-white/10">
+                <div
+                  className={`h-1.5 rounded-full ${barColor(value)} transition-all duration-700`}
+                  style={{ width: `${value}%` }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-white/10">
-              <div
-                className={`h-1.5 rounded-full ${barColor(breakdown[key])} transition-all duration-700`}
-                style={{ width: `${breakdown[key]}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
