@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { SupplementalDetail, TailorResult } from '@/lib/types';
+import { cvHeader } from '@/lib/cv-header';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
 
@@ -19,13 +20,11 @@ function slugify(value: string): string {
 interface TailoredResultProps {
   result: TailorResult;
   company?: string;
-  // Candidate name taken from the imported master CV, used for the PDF filename.
-  candidateName?: string;
   onRegenerate?: (details: SupplementalDetail[]) => void;
   isRegenerating?: boolean;
 }
 
-export function TailoredResult({ result, company, candidateName, onRegenerate, isRegenerating }: TailoredResultProps) {
+export function TailoredResult({ result, company, onRegenerate, isRegenerating }: TailoredResultProps) {
   const [copied, setCopied] = useState(false);
   const [showStrategy, setShowStrategy] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'error'>('idle');
@@ -65,8 +64,10 @@ export function TailoredResult({ result, company, candidateName, onRegenerate, i
       const blob = await generateCvPdf(result);
       const url = URL.createObjectURL(blob);
       // Filename: name_cv_year_company, e.g. ali_baran_gunduz_cv_2026_tesla.pdf
+      // The name is the CV header name (what is printed on the document), not
+      // the contact blob from the master CV first line.
       const parts = [
-        slugify(candidateName || ''),
+        slugify(cvHeader.name),
         'cv',
         String(new Date().getFullYear()),
         slugify(company || ''),

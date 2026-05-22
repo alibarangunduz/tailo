@@ -316,9 +316,6 @@ export default function TailorPage() {
               <TailoredResult
                 result={result}
                 company={company}
-                candidateName={
-                  masterCV.split("\n").map((l) => l.trim()).find(Boolean) || ""
-                }
                 onRegenerate={handleRegenerate}
                 isRegenerating={isLoading}
               />
