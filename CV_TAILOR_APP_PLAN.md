@@ -12,6 +12,18 @@ with streaming, match scoring, gap analysis, generation history, and a one-page,
 ATS-friendly PDF export. This document keeps the original plan for context; the
 sections below are updated to match the shipped implementation.
 
+Recently shipped on top of the MVP:
+
+- **Fill the gap (honest regenerate):** each missing or partial gap in the gap
+  analysis now has a note field. The user types real details they actually have
+  but never added to the master CV, then regenerates. The supplied notes are
+  passed as a trusted "Supplemental Experience" block, and the system prompt
+  treats them as truthful so gaps are filled honestly, never fabricated. After a
+  successful regenerate, the app offers to fold those details into the saved
+  master CV so they persist. See Phase 4 below.
+- **Named PDF export:** the downloaded PDF filename is `name_cv_year_company`
+  (e.g. `ali_baran_gunduz_cv_2026_tesla.pdf`), accents transliterated.
+
 ## Why This Exists
 
 Applying to jobs requires tailoring your CV for each role. Doing this manually takes 30-60 minutes per application. This app automates the first pass: reordering sections, reframing bullet points, surfacing the most relevant experience, and scoring the match, all while respecting the truth of what the user has actually done.
@@ -249,6 +261,21 @@ centered underlined company names, and italic locations. Generation runs
 client-side and is dynamically imported so `@react-pdf/renderer` stays out of
 the SSR and initial bundle. Contact header values live in `src/lib/cv-header.ts`.
 
+The download filename is built in `handleDownloadPdf` (`src/components/tailored-result.tsx`)
+as `name_cv_year_company`, for example `ali_baran_gunduz_cv_2026_tesla.pdf`. The
+name comes from `cvHeader.name` (the name printed on the document), the year is
+the current year, and the company is the one entered in the job-description form.
+A `slugify` helper lowercases, NFD-normalizes to strip accents (Gündüz to gunduz),
+and joins word runs with underscores. Blank parts (e.g. an empty company) are
+dropped.
+
+> **TODO (multi-user):** the filename name is currently fixed to the
+> `cvHeader.name` constant, so every export uses the same person's name. When
+> moving beyond the single-user MVP, add a real name field (an input on the
+> master CV, or a `name` column on the saved CV) and source the filename name
+> from the loaded CV instead of the constant. Parsing the name out of the pasted
+> CV text is not reliable: the first line is a single contact blob.
+
 ### Key UI Components
 
 **Main Tailoring Page (app/tailor/page.tsx):**
@@ -306,11 +333,15 @@ the SSR and initial bundle. Contact header values live in `src/lib/cv-header.ts`
   - "Lead with AI experience" vs "Lead with full-stack experience"
   - User picks the best one
 
-## Phase 4 — Gap Analysis + Action Plan (Future)
+## Phase 4 — Gap Analysis + Action Plan (Partly shipped)
 
-- Actionable suggestions: "You're missing RAG experience, here's a weekend project"
-- Confidence scoring per requirement: strong match, partial, gap
-- Track which gaps appear across multiple applications to prioritize learning
+- [x] Confidence scoring per requirement: strong match, partial, gap
+- [x] Fill the gap: user supplies real details for a missing/partial gap and
+  regenerates, with the option to save those details back to the master CV
+  (see Current Status). Honest by construction: the model only uses what the
+  user actually provides.
+- [ ] Actionable suggestions: "You're missing RAG experience, here's a weekend project"
+- [ ] Track which gaps appear across multiple applications to prioritize learning
 
 ## Phase 5 — Multi-Version Generation (Future)
 
@@ -429,6 +460,9 @@ npm run dev
 - [x] Core tailoring (master CV + job description → tailored CV)
 - [x] Match scoring and gap analysis
 - [x] Generation history
+- [x] Fill the gap: regenerate with user-supplied details for missing gaps
+- [x] Named PDF export (name_cv_year_company)
+- [ ] Per-CV name field so the PDF filename follows the loaded CV (multi-user)
 - [ ] Company culture intelligence
 - [ ] Strategic section reordering
 - [ ] Multi-version generation with different strategies
