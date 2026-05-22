@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCompletion } from "@ai-sdk/react";
 import { CVUpload } from "@/components/cv-upload";
 import { JobDescriptionInput } from "@/components/job-description-input";
 import { TailoredResult } from "@/components/tailored-result";
 import { Logo } from "@/components/logo";
-import { MasterCVSummary, TailorResult } from "@/lib/types";
+import { MasterCVSummary, SupplementalDetail, TailorResult } from "@/lib/types";
 
 export default function TailorPage() {
   const [masterCV, setMasterCV] = useState("");
@@ -20,6 +20,11 @@ export default function TailorPage() {
   const [cvName, setCvName] = useState("My CV");
   const [cvLoaded, setCvLoaded] = useState(false);
   const [savedCVs, setSavedCVs] = useState<MasterCVSummary[]>([]);
+  // Details from the last "fill the gap" regenerate, offered for saving into
+  // the master CV once the regenerate succeeds.
+  const [savableDetails, setSavableDetails] = useState<SupplementalDetail[]>([]);
+  // Tracks the details in-flight so onFinish knows the run was a gap fill.
+  const pendingDetailsRef = useRef<SupplementalDetail[]>([]);
 
   const { complete, isLoading, completion } = useCompletion({
     api: "/api/tailor",
@@ -35,8 +40,13 @@ export default function TailorPage() {
         const parsed = JSON.parse(cleaned);
         setResult(parsed);
         setParseError(false);
+        if (pendingDetailsRef.current.length > 0) {
+          setSavableDetails(pendingDetailsRef.current);
+        }
       } catch {
         setParseError(true);
+      } finally {
+        pendingDetailsRef.current = [];
       }
     },
   });
@@ -130,9 +140,43 @@ export default function TailorPage() {
   const handleTailor = () => {
     setResult(null);
     setParseError(false);
+    setSavableDetails([]);
+    pendingDetailsRef.current = [];
     complete("", {
       body: { masterCV, masterCVId, jobDescription, company, jobTitle },
     });
+  };
+
+  // Re-run the tailor with extra details the user confirmed for specific gaps.
+  const handleRegenerate = (details: SupplementalDetail[]) => {
+    if (details.length === 0) return;
+    setResult(null);
+    setParseError(false);
+    setSavableDetails([]);
+    pendingDetailsRef.current = details;
+    complete("", {
+      body: {
+        masterCV,
+        masterCVId,
+        jobDescription,
+        company,
+        jobTitle,
+        supplementalDetails: details,
+      },
+    });
+  };
+
+  // Fold the confirmed gap details into the saved master CV so they are not
+  // lost on the next tailoring run.
+  const handleSaveDetailsToMaster = async () => {
+    if (savableDetails.length === 0) return;
+    const addition = savableDetails
+      .map((d) => `- ${d.requirement}: ${d.note}`)
+      .join("\n");
+    const updated = `${masterCV.trimEnd()}\n\nAdditional Experience\n${addition}\n`;
+    setMasterCV(updated);
+    await handleSaveCV(cvName, updated);
+    setSavableDetails([]);
   };
 
   const canTailor =
@@ -245,7 +289,37 @@ export default function TailorPage() {
                 </pre>
               </div>
             )}
-            {result && <TailoredResult result={result} company={company} />}
+            {savableDetails.length > 0 && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-500/20 bg-blue-500/10 p-4">
+                <p className="text-xs text-blue-200">
+                  Add these {savableDetails.length} detail
+                  {savableDetails.length > 1 ? "s" : ""} to your master CV so you do not
+                  have to re-enter them next time?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSavableDetails([])}
+                    className="rounded-lg px-3 py-1.5 text-xs text-gray-400 transition hover:text-white"
+                  >
+                    Not now
+                  </button>
+                  <button
+                    onClick={handleSaveDetailsToMaster}
+                    className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-900 transition hover:bg-gray-100"
+                  >
+                    Update master CV
+                  </button>
+                </div>
+              </div>
+            )}
+            {result && (
+              <TailoredResult
+                result={result}
+                company={company}
+                onRegenerate={handleRegenerate}
+                isRegenerating={isLoading}
+              />
+            )}
           </div>
         </div>
       </div>

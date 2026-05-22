@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { TailorResult } from '@/lib/types';
+import { SupplementalDetail, TailorResult } from '@/lib/types';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
 
 interface TailoredResultProps {
   result: TailorResult;
   company?: string;
+  onRegenerate?: (details: SupplementalDetail[]) => void;
+  isRegenerating?: boolean;
 }
 
-export function TailoredResult({ result, company }: TailoredResultProps) {
+export function TailoredResult({ result, company, onRegenerate, isRegenerating }: TailoredResultProps) {
   const [copied, setCopied] = useState(false);
   const [showStrategy, setShowStrategy] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'error'>('idle');
@@ -158,7 +160,12 @@ export function TailoredResult({ result, company }: TailoredResultProps) {
         )}
       </div>
 
-      <GapAnalysis gaps={result.gaps} strengths={result.strengths} />
+      <GapAnalysis
+        gaps={result.gaps}
+        strengths={result.strengths}
+        onRegenerate={onRegenerate}
+        isRegenerating={isRegenerating}
+      />
     </div>
   );
 }

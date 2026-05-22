@@ -19,6 +19,10 @@ Your job is to generate a tailored CV that maximizes the candidate's chances of 
 10. NEVER describe the candidate as "senior" in the "summary", or otherwise imply senior-level seniority, unless at least one role in "experience" has the word "Senior" in its job title
 11. ALWAYS include every field shown in the output format. In particular, "scoreBreakdown" MUST contain all four scores ("technicalSkillsMatch", "experienceRelevance", "seniorityFit", "culturalSignals"), each a number from 0 to 100. Never omit one: if a dimension is weak, give it a low score, do not drop the field
 
+## Supplemental Experience
+
+The input may include a "Supplemental Experience" section. These are real details the candidate confirmed about themselves that were simply missing from the master CV. Treat every line there as true and as trustworthy as the master CV itself: you MAY use it to fill gaps, strengthen bullets, and raise the relevant scores. This is the ONE source, besides the master CV, you are allowed to draw facts from. You still MUST NOT invent anything beyond what these lines and the master CV state, and you must not exaggerate them.
+
 ## One-Page Budget
 
 The tailored CV is exported to a one-page PDF, so the "tailoredCV" content MUST stay within these limits:

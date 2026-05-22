@@ -4,16 +4,28 @@ import { systemPrompt } from '@/lib/prompts';
 import { prisma } from '@/lib/db';
 
 export async function POST(req: Request) {
-  const { masterCV, masterCVId, jobDescription, company, jobTitle } = await req.json();
+  const { masterCV, masterCVId, jobDescription, company, jobTitle, supplementalDetails } =
+    await req.json();
 
   if (!masterCV || !jobDescription || !company || !jobTitle) {
     return Response.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
+  // Real details the user confirmed for specific gaps but had not yet added to
+  // the master CV. The system prompt allows these to be used as truthful facts.
+  const supplementalBlock =
+    Array.isArray(supplementalDetails) && supplementalDetails.length > 0
+      ? `\n\n## Supplemental Experience\n${supplementalDetails
+          .map(
+            (d: { requirement: string; note: string }) => `- ${d.requirement}: ${d.note}`,
+          )
+          .join('\n')}`
+      : '';
+
   const result = streamText({
     model: anthropic('claude-sonnet-4-5'),
     system: systemPrompt,
-    prompt: `## Master CV\n${masterCV}\n\n## Target Job Description\nCompany: ${company}\nRole: ${jobTitle}\n\n${jobDescription}\n\nAnalyze the gap between this CV and the job description. Then generate a tailored version.`,
+    prompt: `## Master CV\n${masterCV}\n\n## Target Job Description\nCompany: ${company}\nRole: ${jobTitle}\n\n${jobDescription}${supplementalBlock}\n\nAnalyze the gap between this CV and the job description. Then generate a tailored version.`,
     onFinish: async ({ text }) => {
       const cleaned = text
         .replace(/^```json\s*/i, '')
