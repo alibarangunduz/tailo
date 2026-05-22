@@ -11,6 +11,13 @@ export interface GapItem {
   suggestion: string;
 }
 
+// A gap the user actually has covered but never added to the master CV,
+// along with the real evidence they supplied for it.
+export interface SupplementalDetail {
+  requirement: string;
+  note: string;
+}
+
 export interface StrengthItem {
   requirement: string;
   candidateEvidence: string;
