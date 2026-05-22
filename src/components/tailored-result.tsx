@@ -2,8 +2,20 @@
 
 import { useState } from 'react';
 import { SupplementalDetail, TailorResult } from '@/lib/types';
+import { cvHeader } from '@/lib/cv-header';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
+
+// Lowercase, strip accents (Gündüz to gunduz), and join word runs with
+// underscores for use in a download filename.
+function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
 
 interface TailoredResultProps {
   result: TailorResult;
@@ -51,10 +63,18 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
       const { generateCvPdf } = await import('@/lib/cv-pdf');
       const blob = await generateCvPdf(result);
       const url = URL.createObjectURL(blob);
-      const slug = (company || 'CV').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+      // Filename: name_cv_year_company, e.g. ali_baran_gunduz_cv_2026_tesla.pdf
+      // The name is the CV header name (what is printed on the document), not
+      // the contact blob from the master CV first line.
+      const parts = [
+        slugify(cvHeader.name),
+        'cv',
+        String(new Date().getFullYear()),
+        slugify(company || ''),
+      ].filter(Boolean);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `CV-${slug || 'CV'}.pdf`;
+      a.download = `${parts.join('_')}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
       setPdfState('idle');
