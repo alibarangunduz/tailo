@@ -20,7 +20,7 @@ highlights your most relevant experience.
 ## Tech Stack
 
 - **Next.js 16** + TypeScript (App Router)
-- **Vercel AI SDK** with Claude (`claude-sonnet-4-5` via Anthropic)
+- **Vercel AI SDK** with Claude (`claude-sonnet-4-6` via Anthropic)
 - **PostgreSQL** via Neon — generation history and master CV storage
 - **Prisma** ORM
 - **unpdf** — text extraction from uploaded PDF CVs

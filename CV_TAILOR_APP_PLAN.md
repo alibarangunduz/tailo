@@ -36,7 +36,7 @@ Applying to jobs requires tailoring your CV for each role. Doing this manually t
 |------|---------|
 | Next.js 16 (App Router) | Framework, TypeScript |
 | Vercel AI SDK | LLM streaming, structured output |
-| Claude API (Anthropic) | `claude-sonnet-4-5` via Vercel AI SDK |
+| Claude API (Anthropic) | `claude-sonnet-4-6` via Vercel AI SDK |
 | Neon (PostgreSQL) | Database, serverless PostgreSQL |
 | Prisma | ORM, schema management |
 | unpdf | Text extraction from uploaded PDF CVs |
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
   const { masterCV, jobDescription, company, jobTitle } = await req.json();
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-5'),
+    model: anthropic('claude-sonnet-4-6'),
     system: systemPrompt,
     prompt: `
 ## Master CV

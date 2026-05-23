@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       : '';
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-5'),
+    model: anthropic('claude-sonnet-4-6'),
     system: systemPrompt,
     prompt: `## Master CV\n${masterCV}\n\n## Target Job Description\nCompany: ${company}\nRole: ${jobTitle}\n\n${jobDescription}${supplementalBlock}\n\nAnalyze the gap between this CV and the job description. Then generate a tailored version.`,
     onFinish: async ({ text }) => {
