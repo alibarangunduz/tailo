@@ -25,6 +25,14 @@ export default function Home() {
             History
           </Link>
         </div>
+        <div className="mt-6">
+          <Link
+            href="/settings"
+            className="text-sm text-gray-500 transition hover:text-gray-300"
+          >
+            Settings
+          </Link>
+        </div>
       </div>
     </div>
   );

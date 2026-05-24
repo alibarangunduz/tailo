@@ -209,6 +209,12 @@ export default function TailorPage() {
             >
               History
             </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
+            >
+              Settings
+            </Link>
           </div>
         </nav>
         <div className="mb-8">

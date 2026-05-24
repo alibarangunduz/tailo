@@ -18,7 +18,7 @@ import {
 } from '@react-pdf/renderer';
 import { getDocumentProxy } from 'unpdf';
 import { TailorResult, TailoredCVContent } from './types';
-import { cvHeader, projectUrl } from './cv-header';
+import { CVHeader, defaultCvHeader, projectUrl } from './cv-header';
 
 // Colors decoded from the .docx (word/document.xml + theme).
 const HEADING_BLUE = '#3C78D8'; // section headings
@@ -174,30 +174,54 @@ function Bullet({ children, styles }: { children: string; styles: Styles }) {
   );
 }
 
-function CVDocument({ result, scale }: { result: TailorResult; scale: number }) {
+function CVDocument({
+  result,
+  scale,
+  header,
+}: {
+  result: TailorResult;
+  scale: number;
+  header: CVHeader;
+}) {
   const cv = sanitizeCv(result.tailoredCV);
   const styles = makeStyles(scale);
 
   return (
-    <Document title={`${cvHeader.name} - CV`} author={cvHeader.name}>
+    <Document title={`${header.name} - CV`} author={header.name}>
       <Page size="LETTER" style={styles.page}>
-        {/* Header: name + contacts on one line */}
+        {/* Header: name + contacts on one line. Each contact renders only if set. */}
         <Text style={styles.headerLine}>
-          <Text style={styles.name}>{toLatin1(cvHeader.name)}</Text>
-          <Text style={styles.sep}>{'  |  '}</Text>
-          <Link style={styles.link} src={`https://${cvHeader.linkedin}`}>
-            {cvHeader.linkedin}
-          </Link>
-          <Text style={styles.sep}>{'  |  '}</Text>
-          <Text style={styles.plain}>{cvHeader.phone}</Text>
-          <Text style={styles.sep}>{'  |  '}</Text>
-          <Link style={styles.link} src={`https://${cvHeader.website}`}>
-            {cvHeader.website}
-          </Link>
-          <Text style={styles.sep}>{'  |  '}</Text>
-          <Link style={styles.link} src={`mailto:${cvHeader.email}`}>
-            {cvHeader.email}
-          </Link>
+          <Text style={styles.name}>{toLatin1(header.name)}</Text>
+          {header.linkedin ? (
+            <>
+              <Text style={styles.sep}>{'  |  '}</Text>
+              <Link style={styles.link} src={`https://${header.linkedin}`}>
+                {header.linkedin}
+              </Link>
+            </>
+          ) : null}
+          {header.phone ? (
+            <>
+              <Text style={styles.sep}>{'  |  '}</Text>
+              <Text style={styles.plain}>{header.phone}</Text>
+            </>
+          ) : null}
+          {header.website ? (
+            <>
+              <Text style={styles.sep}>{'  |  '}</Text>
+              <Link style={styles.link} src={`https://${header.website}`}>
+                {header.website}
+              </Link>
+            </>
+          ) : null}
+          {header.email ? (
+            <>
+              <Text style={styles.sep}>{'  |  '}</Text>
+              <Link style={styles.link} src={`mailto:${header.email}`}>
+                {header.email}
+              </Link>
+            </>
+          ) : null}
         </Text>
 
         {cv.summary ? (
@@ -310,21 +334,24 @@ async function countPages(blob: Blob): Promise<number> {
   return doc.numPages;
 }
 
-function renderAt(result: TailorResult, scale: number): Promise<Blob> {
-  return pdf(<CVDocument result={result} scale={scale} />).toBlob();
+function renderAt(result: TailorResult, scale: number, header: CVHeader): Promise<Blob> {
+  return pdf(<CVDocument result={result} scale={scale} header={header} />).toBlob();
 }
 
 // Renders the CV at the largest content scale that still fits on one page.
 // Taller content produces more pages, so page count is monotonic in scale and a
 // binary search converges in a handful of fast renders.
-export async function generateCvPdf(result: TailorResult): Promise<Blob> {
+export async function generateCvPdf(
+  result: TailorResult,
+  header: CVHeader = defaultCvHeader,
+): Promise<Blob> {
   // If the largest scale already fits, the CV is short: use it to fill the page.
-  const maxBlob = await renderAt(result, MAX_SCALE);
+  const maxBlob = await renderAt(result, MAX_SCALE, header);
   if ((await countPages(maxBlob)) === 1) return maxBlob;
 
   // If even the smallest scale overflows, the content is too long to fit on one
   // page: return the most compact render as a best effort.
-  let fitBlob = await renderAt(result, MIN_SCALE);
+  let fitBlob = await renderAt(result, MIN_SCALE, header);
   if ((await countPages(fitBlob)) > 1) return fitBlob;
 
   // Binary search for the largest one-page scale between the bounds.
@@ -332,7 +359,7 @@ export async function generateCvPdf(result: TailorResult): Promise<Blob> {
   let hi = MAX_SCALE;
   for (let i = 0; i < FIT_STEPS; i++) {
     const mid = (lo + hi) / 2;
-    const blob = await renderAt(result, mid);
+    const blob = await renderAt(result, mid, header);
     if ((await countPages(blob)) === 1) {
       lo = mid;
       fitBlob = blob;

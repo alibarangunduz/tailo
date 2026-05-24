@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Contact header for the exported CV PDF. Single-user MVP: one row, keyed by a
+// fixed id, editable from the settings page.
+model Settings {
+  id        String   @id @default("singleton")
+  name      String
+  email     String
+  phone     String
+  linkedin  String
+  website   String
+  updatedAt DateTime @updatedAt
+}
+
 model MasterCV {
   id        String   @id @default(cuid())
   name      String

@@ -16,6 +16,8 @@ highlights your most relevant experience.
 - Exports the tailored CV as a one-page, ATS-friendly PDF
 - Saves multiple master CVs and switches between them in one click
 - Stores every version so you can track what you sent where
+- Lets you configure the PDF contact header (name, email, phone, LinkedIn,
+  website) from a settings page, independent of the master CV
 
 ## Tech Stack
 
@@ -37,8 +39,11 @@ italic locations. It is generated client-side, so the output is real
 selectable text that applicant tracking systems (ATS) parse cleanly,
 never a rasterized image.
 
-The layout lives in `src/lib/cv-pdf.tsx`; the contact header (name,
-LinkedIn, phone, website, email) lives in `src/lib/cv-header.ts`.
+The layout lives in `src/lib/cv-pdf.tsx`. The contact header (name, email,
+phone, LinkedIn, website) is configured on the **Settings** page (`/settings`)
+and stored in the database, so the exported PDF uses values the user controls
+rather than parsing them out of the master CV. `src/lib/cv-header.ts` holds the
+type and the default values used to seed an empty settings record.
 
 ## Why I Built This
 
@@ -54,6 +59,10 @@ while keeping the human in control of the final version.
 - [x] Generation history
 - [x] One-page, ATS-friendly PDF export
 - [x] Saved master CVs with quick switching, renaming, and deletion
+- [x] Settings page for the configurable PDF contact header
+- [ ] User accounts and authentication: settings, master CVs, and history
+  become per-user, so each signed-in user gets their own isolated workspace
+- [ ] Credits and payments: users buy credits and spend them per tailoring run
 - [ ] Embed the exact template fonts (Nunito, Spectral)
 - [ ] Structured education and projects in the data model
 - [ ] Company culture intelligence
