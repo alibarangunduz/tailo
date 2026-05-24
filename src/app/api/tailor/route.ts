@@ -2,13 +2,20 @@ import { streamText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { systemPrompt } from '@/lib/prompts';
 import { prisma } from '@/lib/db';
+import { validateTailorInput } from '@/lib/guardrails';
+
+// Caps the model's output so a single run cannot balloon. The tailored CV is
+// budgeted to one page of JSON, so this sits comfortably above a valid response.
+const MAX_OUTPUT_TOKENS = 4_000;
 
 export async function POST(req: Request) {
   const { masterCV, masterCVId, jobDescription, company, jobTitle, supplementalDetails } =
     await req.json();
 
-  if (!masterCV || !jobDescription || !company || !jobTitle) {
-    return Response.json({ error: 'Missing required fields' }, { status: 400 });
+  // Guardrails: reject oversized or abusive input before spending any tokens.
+  const check = validateTailorInput({ masterCV, jobDescription, company, jobTitle, supplementalDetails });
+  if (!check.ok) {
+    return Response.json({ error: check.error }, { status: check.status });
   }
 
   // Real details the user confirmed for specific gaps but had not yet added to
@@ -24,6 +31,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: anthropic('claude-sonnet-4-6'),
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     system: systemPrompt,
     prompt: `## Master CV\n${masterCV}\n\n## Target Job Description\nCompany: ${company}\nRole: ${jobTitle}\n\n${jobDescription}${supplementalBlock}\n\nAnalyze the gap between this CV and the job description. Then generate a tailored version.`,
     onFinish: async ({ text }) => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MasterCVSummary } from "@/lib/types";
+import { LIMITS, validateUpload } from "@/lib/guardrails";
 
 interface CVUploadProps {
   value: string;
@@ -37,10 +38,20 @@ export function CVUpload({
   const [justSaved, setJustSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
+    // Client-side guardrail: reject non-PDF or oversized files before upload.
+    // The server re-validates; this just saves a round-trip and gives feedback.
+    const check = validateUpload(file);
+    if (!check.ok) {
+      setUploadError(check.error);
+      e.target.value = "";
+      return;
+    }
     setUploading(true);
     const form = new FormData();
     form.append("file", file);
@@ -49,12 +60,14 @@ export function CVUpload({
       body: form,
     });
     const data = await res.json();
-    if (data.content) {
+    if (res.ok && data.content) {
       // An uploaded PDF is a brand new CV: reset any saved selection and
       // name it after the file (minus the .pdf extension).
       onNewCV();
       onChange(data.content);
       onNameChange(file.name.replace(/\.pdf$/i, ""));
+    } else {
+      setUploadError(data.error || "Upload failed.");
     }
     setUploading(false);
     e.target.value = ""; // allow re-uploading the same file
@@ -183,6 +196,7 @@ export function CVUpload({
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder="CV name"
+          maxLength={LIMITS.shortFieldChars}
           className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-white/20 focus:outline-none"
         />
         <button
@@ -207,11 +221,15 @@ export function CVUpload({
           onChange={handleFile}
         />
       </div>
+      {uploadError && (
+        <p className="text-xs text-red-400">{uploadError}</p>
+      )}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Paste your master CV here, or upload a PDF above..."
         rows={14}
+        maxLength={LIMITS.cvChars}
         className="w-full resize-none rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300 placeholder-gray-600 focus:border-white/20 focus:outline-none"
       />
     </div>

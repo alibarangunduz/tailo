@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { CVHeader, defaultCvHeader } from "@/lib/cv-header";
+import { LIMITS } from "@/lib/guardrails";
 
 // Fields shown in the form, in display order. Labels and hints are kept here so
 // the markup stays a simple loop.
@@ -121,6 +122,7 @@ export default function SettingsPage() {
                 value={form[field.key]}
                 onChange={(e) => update(field.key, e.target.value)}
                 placeholder={field.placeholder}
+                maxLength={LIMITS.shortFieldChars}
                 disabled={status === "loading"}
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-600 transition focus:border-white/30 focus:outline-none disabled:opacity-50"
               />
