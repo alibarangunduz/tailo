@@ -1,5 +1,6 @@
-// Contact header for the exported CV PDF. Single-user MVP: these values come
-// from the master CV template (CV Template Tailo.docx) and can be edited here.
+// Contact header for the exported CV PDF. Single-user MVP: the live values are
+// stored in the Settings table and edited from the settings page. The constant
+// below seeds an empty Settings row and is the fallback when none exists yet.
 
 export interface CVHeader {
   name: string;
@@ -9,7 +10,7 @@ export interface CVHeader {
   email: string;
 }
 
-export const cvHeader: CVHeader = {
+export const defaultCvHeader: CVHeader = {
   name: 'Ali Baran Gündüz',
   linkedin: 'linkedin.com/in/alibarangunduz',
   phone: '+49 163-252-0507',

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SupplementalDetail, TailorResult } from '@/lib/types';
-import { cvHeader } from '@/lib/cv-header';
+import { CVHeader, defaultCvHeader } from '@/lib/cv-header';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
 
@@ -28,6 +28,20 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
   const [copied, setCopied] = useState(false);
   const [showStrategy, setShowStrategy] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'error'>('idle');
+  // Contact header for the exported PDF, configured on the settings page.
+  // Falls back to the default constant until the fetch resolves.
+  const [header, setHeader] = useState<CVHeader>(defaultCvHeader);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((s) => {
+        if (s && s.name) setHeader(s);
+      })
+      .catch(() => {
+        // ignore: fall back to the default header
+      });
+  }, []);
 
   const cv = result.tailoredCV;
 
@@ -61,13 +75,13 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
     try {
       // Dynamic import keeps @react-pdf/renderer out of the SSR and initial bundle.
       const { generateCvPdf } = await import('@/lib/cv-pdf');
-      const blob = await generateCvPdf(result);
+      const blob = await generateCvPdf(result, header);
       const url = URL.createObjectURL(blob);
       // Filename: name_cv_year_company, e.g. ali_baran_gunduz_cv_2026_tesla.pdf
       // The name is the CV header name (what is printed on the document), not
       // the contact blob from the master CV first line.
       const parts = [
-        slugify(cvHeader.name),
+        slugify(header.name),
         'cv',
         String(new Date().getFullYear()),
         slugify(company || ''),
