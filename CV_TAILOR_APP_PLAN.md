@@ -23,6 +23,89 @@ Recently shipped on top of the MVP:
   master CV so they persist. See Phase 4 below.
 - **Named PDF export:** the downloaded PDF filename is `name_cv_year_company`
   (e.g. `ali_baran_gunduz_cv_2026_tesla.pdf`), accents transliterated.
+- **Settings page:** a `/settings` page lets the user configure the PDF contact
+  header (name, email, phone, LinkedIn, website). The values are stored in a
+  `Settings` table and threaded into the PDF export and the download filename,
+  so the export no longer depends on a hardcoded constant or on parsing the name
+  out of the master CV. See "Settings and the contact header" below.
+
+## Pre-Deployment Security Hardening
+
+The app was built as a single-user MVP with **no authentication and no access
+control**, so as written it is not safe to expose publicly. The list below is an
+audit of the real gaps in the current code, ordered so they can be fixed one by
+one. Severity: 🔴 critical (do not deploy without), 🟠 high, 🟡 medium.
+
+Some fixes are independent of auth and should land first; the rest are closed by
+Phases 6 (auth) and 7 (credits). Do them in this order:
+
+### A. Independent of auth (DONE — shipped via the guardrails layer)
+
+All four are now enforced by a single pre-LLM guardrails module,
+`src/lib/guardrails.ts`, which is the source of truth for what the app accepts.
+It is applied server-side (authoritative) on every write/generate route and
+re-used on the client for input caps and friendly feedback. Limits live in one
+`LIMITS` object: master CV 30k chars, job description 20k, short fields 200,
+supplemental notes 20 items × 1k chars, uploads 5 MB.
+
+1. 🟢 **Unbounded LLM input → unbounded token cost.** `POST /api/tailor` now calls
+   `validateTailorInput()` before any token is spent, rejecting oversized payloads
+   with `413` and malformed ones with `400`. Inputs also have client-side
+   `maxLength` caps so the limit is visible while typing.
+2. 🟢 **No output cap on the model.** `streamText` now passes
+   `maxOutputTokens: 4000`, sized above a valid one-page JSON response.
+3. 🟢 **Unvalidated file upload.** `POST /api/master-cv/upload` now calls
+   `validateUpload()` (PDF type + 5 MB cap) before reading the buffer, then
+   re-checks the extracted text length. The client pre-checks the file too.
+4. 🟢 **Prompt-injection / payload-padding surface.** `looksAbusive()` rejects the
+   cheap high-signal abuse cases (a character or short token repeated thousands of
+   times to pad the prompt) before the LLM call. This is defense in depth; the
+   length caps remain the primary control and the system prompt stays
+   authoritative. Full semantic injection defense is out of scope by design.
+
+### B. Requires authentication (Phase 6)
+
+5. 🔴 **Every API route is open.** `/api/tailor`, `/api/master-cv`,
+   `/api/master-cv/[id]`, `/api/settings`, and `/api/history` have no auth, so
+   anyone who finds a URL can spend tokens, read, or delete data.
+   - Fix: gate all routes behind a session; reject unauthenticated requests.
+6. 🔴 **No data isolation / ownership checks.** `GET /api/master-cv/[id]` returns
+   *any* CV by id, `DELETE` removes *any* CV, `GET /api/history` returns *all*
+   history, and `Settings` is a single global row. With multiple users this leaks
+   and destroys other users' data; even single-user, the open URLs are exploitable.
+   - Fix: derive `userId` from the session, filter every query by it, verify
+     ownership on id-addressed routes, and return `404` (not `403`) on another
+     user's record so existence is not leaked.
+7. 🟠 **No rate limiting or concurrency limit.** Nothing stops a scripted loop or
+   parallel flood of `/api/tailor`.
+   - Fix: per-user (and per-IP for anonymous) rate limits and a concurrency cap.
+8. 🟡 **CSRF posture for mutations.** Once cookie-based sessions exist, the POST/
+   PUT/DELETE routes need same-site / CSRF protection (Auth.js covers its own
+   endpoints; app mutation routes must rely on `SameSite` cookies and/or a token).
+
+### C. Requires credits / payments (Phase 7)
+
+9. 🔴 **Token spend is ungated.** Even with auth, an authenticated user can run
+   `/api/tailor` without limit.
+   - Fix: a pre-flight credit check that debits before the model call and rejects
+     at zero balance (see Phase 7). Credits are the hard ceiling on spend.
+10. 🟠 **Streaming-disconnect billing.** With `streamText`, a client disconnect can
+    still incur generated-token cost while `onFinish` (which persists history) may
+    not fire, so a naive "charge on finish" leaks free runs.
+    - Fix: reserve credit on start, settle on finish, refund on hard failure.
+11. 🟠 **Stripe webhook integrity.** When payments land, an unverified or
+    non-idempotent webhook can be forged or replayed to grant free credits.
+    - Fix: verify the Stripe signature and make crediting idempotent on the event id.
+
+### D. Already in good shape (keep it that way)
+
+- Secrets (`ANTHROPIC_API_KEY`, `DATABASE_URL`) are server-side and git-ignored;
+  the LLM key never reaches the client. Keep all new secrets (`AUTH_SECRET`,
+  Stripe keys + webhook secret) in Vercel env only.
+- Neon encrypts data at rest. Note this does **not** substitute for app-level
+  isolation (gap 6): an isolation bug leaks data regardless of disk encryption.
+- If serving EU users, add a real account + data deletion path (GDPR) when auth
+  lands: cascade-delete the user's CVs, history, and settings.
 
 ## Why This Exists
 
@@ -93,6 +176,19 @@ model TailoredCV {
   strengthAnalysis String   @db.Text
   createdAt        DateTime @default(now())
 }
+
+// Contact header for the exported PDF. Single-user MVP: one row keyed by a
+// fixed id ("singleton"), editable from the /settings page. Becomes per-user
+// when authentication lands (see Phase 6).
+model Settings {
+  id        String   @id @default("singleton")
+  name      String
+  email     String
+  phone     String
+  linkedin  String
+  website   String
+  updatedAt DateTime @updatedAt
+}
 ```
 
 ### Project Structure
@@ -107,11 +203,14 @@ tailo/
 │   │   │   └── page.tsx                # Main tailoring interface
 │   │   ├── history/
 │   │   │   └── page.tsx                # Past generations
+│   │   ├── settings/
+│   │   │   └── page.tsx                # Configure the PDF contact header
 │   │   └── api/
 │   │       ├── tailor/route.ts         # POST: generate tailored CV (streaming)
 │   │       ├── master-cv/route.ts      # GET list, POST create, PUT update
 │   │       ├── master-cv/[id]/route.ts # GET one, DELETE one (cascades tailored CVs)
 │   │       ├── master-cv/upload/route.ts  # PDF text extraction (no persistence)
+│   │       ├── settings/route.ts       # GET (seed + read), PUT (upsert) contact header
 │   │       └── history/route.ts        # GET tailored versions
 │   ├── components/
 │   │   ├── cv-upload.tsx               # PDF upload + text paste
@@ -124,7 +223,7 @@ tailo/
 │       ├── prompts.ts                  # System prompt for Claude
 │       ├── pdf-parser.ts               # PDF to text extraction (unpdf)
 │       ├── cv-pdf.tsx                  # One-page PDF export (@react-pdf/renderer)
-│       ├── cv-header.ts                # Contact header constants for the PDF
+│       ├── cv-header.ts                # Contact header type + default seed values
 │       └── types.ts                    # TypeScript types
 ├── prisma/
 │   └── schema.prisma
@@ -259,22 +358,33 @@ The tailored CV is exported as a one-page, ATS-friendly PDF with
 master CV template: a single-line header, blue section headings with rules,
 centered underlined company names, and italic locations. Generation runs
 client-side and is dynamically imported so `@react-pdf/renderer` stays out of
-the SSR and initial bundle. Contact header values live in `src/lib/cv-header.ts`.
+the SSR and initial bundle. The contact header values come from the `Settings`
+record (see below), with `defaultCvHeader` in `src/lib/cv-header.ts` as the seed.
 
 The download filename is built in `handleDownloadPdf` (`src/components/tailored-result.tsx`)
 as `name_cv_year_company`, for example `ali_baran_gunduz_cv_2026_tesla.pdf`. The
-name comes from `cvHeader.name` (the name printed on the document), the year is
-the current year, and the company is the one entered in the job-description form.
-A `slugify` helper lowercases, NFD-normalizes to strip accents (Gündüz to gunduz),
-and joins word runs with underscores. Blank parts (e.g. an empty company) are
-dropped.
+name comes from the configured settings header (the name printed on the
+document), the year is the current year, and the company is the one entered in
+the job-description form. A `slugify` helper lowercases, NFD-normalizes to strip
+accents (Gündüz to gunduz), and joins word runs with underscores. Blank parts
+(e.g. an empty company) are dropped.
 
-> **TODO (multi-user):** the filename name is currently fixed to the
-> `cvHeader.name` constant, so every export uses the same person's name. When
-> moving beyond the single-user MVP, add a real name field (an input on the
-> master CV, or a `name` column on the saved CV) and source the filename name
-> from the loaded CV instead of the constant. Parsing the name out of the pasted
-> CV text is not reliable: the first line is a single contact blob.
+### Settings and the contact header
+
+The PDF contact header is configured on the `/settings` page rather than parsed
+from the master CV (the first line of a pasted CV is a single contact blob, so
+the name cannot be extracted reliably). The values live in a single `Settings`
+row keyed by a fixed id (`"singleton"`), exposed through `/api/settings`: `GET`
+seeds the row from `defaultCvHeader` on first read and returns it, and `PUT`
+upserts the edited values (name and email required). `tailored-result.tsx`
+fetches the settings and passes them into `generateCvPdf(result, header)`, which
+threads the header through the PDF document; each contact line renders only when
+its field is set, so blank fields leave no dangling separators. `cv-header.ts`
+keeps the `CVHeader` type, the `defaultCvHeader` seed, and the project-link map.
+
+> **TODO (multi-user):** the `Settings` row is a single shared record today. When
+> authentication lands (Phase 6), it gains a `userId` and becomes one settings
+> record per user, so the PDF header and filename follow the signed-in user.
 
 ### Key UI Components
 
@@ -349,6 +459,148 @@ dropped.
 - Side-by-side comparison view
 - A/B tracking: which version style gets more callbacks
 - pgvector integration when users have large master CVs with many years of experience
+
+## Phase 6 — Accounts and Multi-Tenancy
+
+Today there is no `User` model, and the `Settings`, `MasterCV`, and `TailoredCV`
+rows are effectively global. This phase makes every record user-scoped so the app
+serves many people with isolated workspaces, and closes security gaps 5–8 and 12.
+
+**Estimated effort:** ~2–3 focused days. The wiring is mechanical; the risk is
+entirely in scoping *every* query by `userId` (a single miss is a data leak).
+Use a battle-tested library (Auth.js / NextAuth v5 with the Prisma adapter) — do
+not hand-roll auth, hashing, or session tokens.
+
+### Schema diff
+
+```prisma
+// New: Auth.js core model plus app data. Account / Session / VerificationToken
+// come from the Auth.js Prisma adapter (add them per its docs).
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+
+  accounts  Account[]      // Auth.js
+  sessions  Session[]      // Auth.js
+  masterCVs MasterCV[]
+  tailored  TailoredCV[]
+  settings  Settings?
+}
+
+model MasterCV {
+  id        String   @id @default(cuid())
+  userId    String                         // + new
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tailoredVersions TailoredCV[]
+  @@index([userId])                        // + new
+}
+
+model TailoredCV {
+  id         String   @id @default(cuid())
+  userId     String                        // + new (denormalized for direct filtering)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  masterCVId String
+  masterCV   MasterCV @relation(fields: [masterCVId], references: [id])
+  // ...existing fields unchanged...
+  @@index([userId])                        // + new
+}
+
+// Settings: drop the fixed "singleton" id; one row per user instead.
+model Settings {
+  id        String   @id @default(cuid())  // changed: no longer "singleton"
+  userId    String   @unique               // + new
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String
+  linkedin  String
+  website   String
+  updatedAt DateTime @updatedAt
+}
+```
+
+### Tasks (in order)
+
+1. Install and configure Auth.js (NextAuth v5) with the Prisma adapter and one
+   provider (Google/GitHub OAuth or email magic link). Add `AUTH_SECRET` and any
+   provider keys to Vercel env (and `.env.local` for dev).
+2. Add the schema above; run `npx prisma generate` and `npx prisma db push`.
+   Write a one-off backfill that assigns all existing rows to your own account and
+   converts the singleton `Settings` row to a per-user row.
+3. Add a session helper (`auth()` server-side) and a sign-in page. Add
+   `middleware.ts` to gate `/tailor`, `/history`, and `/settings`.
+4. Thread `userId` into every route and query — the load-bearing step:
+   - `/api/tailor`: require a session; set `userId` on created `MasterCV` and
+     `TailoredCV`.
+   - `/api/master-cv` (list/create/update) and `/api/master-cv/[id]` (get/delete):
+     filter and verify by `session.userId`; return `404` on another user's id.
+   - `/api/history`: `where: { userId }`.
+   - `/api/settings`: key the upsert on `userId`; on first read, seed from
+     `defaultCvHeader` for that user (the existing seed logic, per user).
+5. Update client fetches/components to assume an authenticated session; add a
+   sign-out control and show the user's name in the nav.
+6. Test isolation explicitly: signed in as user A, attempt to read/delete user B's
+   CV and history by id — must 404. This is the acceptance test for the phase.
+
+## Phase 7 — Credits and Payments
+
+With the app multi-tenant, meter and monetize usage so a tailoring run costs
+credits. Closes security gaps 9–11. **Estimated effort:** ~2–3 days incl. Stripe
+webhooks and edge cases.
+
+### Unit economics
+
+A `claude-sonnet-4-6` run is roughly 3–6k input + 2–3k output tokens, on the order
+of ~$0.04–0.07 per generation (verify against current Anthropic pricing). A
+"fill the gap" regenerate costs about the same again. Price credit packs with
+margin on top of that (e.g. 20 runs / $5, 100 / $20). Recommended go-to-market:
+**freemium (a few free runs) + credit packs** — simplest to build, and credits
+make token spend self-limiting.
+
+### Schema diff
+
+```prisma
+// Append-only ledger: balance = sum(delta). Auditable and reconstructable.
+model CreditLedger {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delta     Int      // + purchase / refund, - debit per run
+  reason    String   // "purchase" | "tailor_run" | "refund"
+  ref       String?  // Stripe event id or TailoredCV id, for idempotency
+  createdAt DateTime @default(now())
+
+  @@unique([reason, ref])   // idempotency: a webhook/run can credit/debit once
+  @@index([userId])
+}
+```
+
+Optionally cache the balance as `User.credits Int @default(0)` for fast reads,
+updated in the same transaction as each ledger entry (ledger remains the source
+of truth). Seed new users with a small free balance.
+
+### Tasks (in order)
+
+1. Add the `CreditLedger` model (+ optional cached balance); generate and push.
+2. Gate `/api/tailor`: before the model call, check balance > 0 (else `402`
+   "out of credits"); **reserve** a credit at start, **settle** it on `onFinish`,
+   and **refund** on hard failure (handles the streaming-disconnect gap 10).
+3. Add Stripe Checkout for credit packs. On the `checkout.session.completed`
+   webhook: verify the signature, then write a `purchase` ledger entry keyed on
+   the Stripe event id so retries are idempotent (gap 11).
+4. Surface the balance in the nav and settings; warn when low and link to the
+   purchase flow.
+5. Keep a dev escape hatch: treat credits as unlimited when auth/payments are not
+   configured, so local development and the single-user path keep working.
+6. Test: insufficient-balance rejection, a real debit per run, refund on failure,
+   and replayed-webhook idempotency.
 
 ---
 
@@ -462,7 +714,9 @@ npm run dev
 - [x] Generation history
 - [x] Fill the gap: regenerate with user-supplied details for missing gaps
 - [x] Named PDF export (name_cv_year_company)
-- [ ] Per-CV name field so the PDF filename follows the loaded CV (multi-user)
+- [x] Settings page for the configurable PDF contact header
+- [ ] User accounts and authentication: per-user settings, master CVs, history
+- [ ] Credits and payments: buy credits, spend them per tailoring run
 - [ ] Company culture intelligence
 - [ ] Strategic section reordering
 - [ ] Multi-version generation with different strategies
