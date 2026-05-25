@@ -1,10 +1,15 @@
 import { prisma } from '@/lib/db';
 import Link from 'next/link';
+import { requireUserIdOrRedirect } from '@/lib/session';
+import { Logo } from '@/components/logo';
+import { UserNav } from '@/components/user-nav';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HistoryPage() {
+  const userId = await requireUserIdOrRedirect('/history');
   const history = await prisma.tailoredCV.findMany({
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     include: { masterCV: { select: { name: true } } },
   });
@@ -12,6 +17,28 @@ export default async function HistoryPage() {
   return (
     <div className="min-h-screen bg-gray-950 px-4 py-8">
       <div className="mx-auto max-w-3xl">
+        <nav className="mb-8 flex items-center justify-between border-b border-white/10 pb-4">
+          <Link href="/" className="flex items-center gap-2 transition hover:opacity-80">
+            <Logo className="h-7 w-7" />
+            <span className="text-lg font-semibold text-white">Tailo</span>
+          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/tailor"
+              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
+            >
+              Tailor
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
+            >
+              Settings
+            </Link>
+            <span className="mx-1 h-4 w-px bg-white/10" />
+            <UserNav />
+          </div>
+        </nav>
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">History</h1>

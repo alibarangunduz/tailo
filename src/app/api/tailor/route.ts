@@ -3,12 +3,16 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { systemPrompt } from '@/lib/prompts';
 import { prisma } from '@/lib/db';
 import { validateTailorInput } from '@/lib/guardrails';
+import { getCurrentUserId, unauthorized } from '@/lib/session';
 
 // Caps the model's output so a single run cannot balloon. The tailored CV is
 // budgeted to one page of JSON, so this sits comfortably above a valid response.
 const MAX_OUTPUT_TOKENS = 4_000;
 
 export async function POST(req: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const { masterCV, masterCVId, jobDescription, company, jobTitle, supplementalDetails } =
     await req.json();
 
@@ -16,6 +20,18 @@ export async function POST(req: Request) {
   const check = validateTailorInput({ masterCV, jobDescription, company, jobTitle, supplementalDetails });
   if (!check.ok) {
     return Response.json({ error: check.error }, { status: check.status });
+  }
+
+  // If the client points at a saved CV, it must be one this user owns; otherwise
+  // ignore it and fall through to creating a fresh CV in onFinish.
+  let ownedMasterCVId: string | null = null;
+  if (masterCVId) {
+    const owned = await prisma.masterCV.findFirst({
+      where: { id: masterCVId, userId },
+      select: { id: true },
+    });
+    if (!owned) return Response.json({ error: 'Not found' }, { status: 404 });
+    ownedMasterCVId = owned.id;
   }
 
   // Real details the user confirmed for specific gaps but had not yet added to
@@ -43,20 +59,21 @@ export async function POST(req: Request) {
       try {
         const parsed = JSON.parse(cleaned);
 
-        let cvId = masterCVId;
+        let cvId = ownedMasterCVId;
         if (!cvId) {
           const firstLine = masterCV
             .split('\n')
             .map((l: string) => l.trim())
             .find(Boolean);
           const created = await prisma.masterCV.create({
-            data: { name: firstLine?.slice(0, 60) || 'Untitled CV', content: masterCV },
+            data: { name: firstLine?.slice(0, 60) || 'Untitled CV', content: masterCV, userId },
           });
           cvId = created.id;
         }
 
         await prisma.tailoredCV.create({
           data: {
+            userId,
             masterCVId: cvId,
             jobTitle,
             company,

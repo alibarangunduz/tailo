@@ -1,8 +1,13 @@
 import Link from "next/link";
+import { UserNav } from "@/components/user-nav";
 
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-950 px-4">
+      {/* Top-right account control: renders only when signed in. */}
+      <div className="absolute right-4 top-4">
+        <UserNav />
+      </div>
       <div className="max-w-lg text-center">
         <h1 className="text-4xl font-bold tracking-tight text-white">
           CV Tailor

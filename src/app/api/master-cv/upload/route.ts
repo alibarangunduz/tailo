@@ -1,9 +1,15 @@
 import { parsePDF } from '@/lib/pdf-parser';
 import { validateUpload, validateCvText } from '@/lib/guardrails';
+import { getCurrentUserId, unauthorized } from '@/lib/session';
 
 // Parses an uploaded PDF and returns its text. Does not persist anything;
 // the caller saves the master CV explicitly via POST/PUT /api/master-cv.
+// Requires a session: parsing is CPU work, so it must not be open to anonymous
+// callers who could spam large files.
 export async function POST(req: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
 
