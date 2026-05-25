@@ -6,6 +6,23 @@ An LLM-powered application that takes a user's master CV and a target job descri
 
 ## Current Status
 
+> **⏱️ Sync — last updated 2026-05-25 (resume here next session)**
+>
+> - **Branch:** `feature/auth` (Phase 6 committed). Earlier work is on
+>   `feature/settings-page` (open PR: settings page + guardrails + security docs).
+> - **Done:** settings page · Zod input guardrails + output cap · **Phase 6 auth**
+>   (Google OAuth, per-user data isolation, all routes gated, verified by tests).
+> - **Live DB already migrated** for auth (User/Account/Session + required
+>   `userId`); existing data backfilled to the owner account.
+> - **▶️ NEXT UP: rate limiting** (security gap 7) — an authenticated user can
+>   still loop `/api/tailor` unbounded → token-cost abuse, the owner's main worry.
+>   Plan: per-user + per-IP limits via Arcjet or Upstash Ratelimit. Then Phase 7
+>   (credits/payments).
+> - **Before public deploy:** set `AUTH_SECRET` + Google creds in Vercel env, add
+>   the prod Google redirect URI, confirm `trustHost`/`AUTH_URL` on Vercel.
+> - **Local env (`.env.local`, git-ignored):** `AUTH_SECRET`, `AUTH_GOOGLE_ID`,
+>   `AUTH_GOOGLE_SECRET` are set. Owner account: gunduzbaran175@gmail.com.
+
 Phase 1 (MVP) is built and working: master CV upload/paste, saved master CVs
 (save, switch, rename, delete), job description input, Claude-powered tailoring
 with streaming, match scoring, gap analysis, generation history, and a one-page,
@@ -63,37 +80,42 @@ supplemental notes 20 items × 1k chars, uploads 5 MB.
    length caps remain the primary control and the system prompt stays
    authoritative. Full semantic injection defense is out of scope by design.
 
-### B. Requires authentication (Phase 6)
+### B. Authentication and isolation (DONE — Phase 6, see below)
 
-5. 🔴 **Every API route is open.** `/api/tailor`, `/api/master-cv`,
-   `/api/master-cv/[id]`, `/api/settings`, and `/api/history` have no auth, so
-   anyone who finds a URL can spend tokens, read, or delete data.
-   - Fix: gate all routes behind a session; reject unauthenticated requests.
-6. 🔴 **No data isolation / ownership checks.** `GET /api/master-cv/[id]` returns
-   *any* CV by id, `DELETE` removes *any* CV, `GET /api/history` returns *all*
-   history, and `Settings` is a single global row. With multiple users this leaks
-   and destroys other users' data; even single-user, the open URLs are exploitable.
-   - Fix: derive `userId` from the session, filter every query by it, verify
-     ownership on id-addressed routes, and return `404` (not `403`) on another
-     user's record so existence is not leaked.
-7. 🟠 **No rate limiting or concurrency limit.** Nothing stops a scripted loop or
-   parallel flood of `/api/tailor`.
-   - Fix: per-user (and per-IP for anonymous) rate limits and a concurrency cap.
-8. 🟡 **CSRF posture for mutations.** Once cookie-based sessions exist, the POST/
-   PUT/DELETE routes need same-site / CSRF protection (Auth.js covers its own
-   endpoints; app mutation routes must rely on `SameSite` cookies and/or a token).
+Shipped via Auth.js (Google OAuth, database sessions, users in our Neon DB). The
+authoritative checks live in `src/lib/session.ts` and run in every route/server
+page, per Next 16 guidance (do not rely on proxy alone). Verified with raw
+`curl`: unauthenticated → 401, a second user → 404 on another user's records.
+
+5. 🟢 **Every API route is open.** All data routes now call `getCurrentUserId()`
+   and return 401 without a session. Audited: every `route.ts` under `src/app/api`
+   is gated except the Auth.js handler itself.
+6. 🟢 **No data isolation / ownership checks.** Every query is scoped to
+   `session.user.id`; id-addressed routes verify ownership and return `404` (not
+   `403`) for other users. `Settings` is now one row per user, keyed by `userId`.
+7. 🔴 **No rate limiting or concurrency limit. ← NEXT UP.** Still open. An
+   *authenticated* user can loop `/api/tailor` without limit, so token cost is
+   unbounded per user. This is the top remaining risk and directly matches the
+   owner's cost-abuse concern.
+   - Fix: per-user (and per-IP) rate limits + a concurrency cap. Candidates:
+     Arcjet (TS-native, Next-friendly) or Upstash Ratelimit. Smaller than full
+     credits and should land before any public exposure.
+8. 🟢 **Upload DoS (found during Phase 6).** `/api/master-cv/upload` ran the PDF
+   parser for anonymous callers; now gated behind a session.
+9. 🟡 **CSRF posture for mutations.** Mitigated by Auth.js `SameSite=Lax` session
+   cookies (browser-enforced). An explicit token would be belt-and-suspenders.
 
 ### C. Requires credits / payments (Phase 7)
 
-9. 🔴 **Token spend is ungated.** Even with auth, an authenticated user can run
-   `/api/tailor` without limit.
-   - Fix: a pre-flight credit check that debits before the model call and rejects
-     at zero balance (see Phase 7). Credits are the hard ceiling on spend.
-10. 🟠 **Streaming-disconnect billing.** With `streamText`, a client disconnect can
+10. 🔴 **Token spend is ungated.** Even with auth, an authenticated user can run
+    `/api/tailor` without limit.
+    - Fix: a pre-flight credit check that debits before the model call and rejects
+      at zero balance (see Phase 7). Credits are the hard ceiling on spend.
+11. 🟠 **Streaming-disconnect billing.** With `streamText`, a client disconnect can
     still incur generated-token cost while `onFinish` (which persists history) may
     not fire, so a naive "charge on finish" leaks free runs.
     - Fix: reserve credit on start, settle on finish, refund on hard failure.
-11. 🟠 **Stripe webhook integrity.** When payments land, an unverified or
+12. 🟠 **Stripe webhook integrity.** When payments land, an unverified or
     non-idempotent webhook can be forged or replayed to grant free credits.
     - Fix: verify the Stripe signature and make crediting idempotent on the event id.
 
@@ -460,16 +482,27 @@ keeps the `CVHeader` type, the `defaultCvHeader` seed, and the project-link map.
 - A/B tracking: which version style gets more callbacks
 - pgvector integration when users have large master CVs with many years of experience
 
-## Phase 6 — Accounts and Multi-Tenancy
+## Phase 6 — Accounts and Multi-Tenancy ✅ DONE
 
-Today there is no `User` model, and the `Settings`, `MasterCV`, and `TailoredCV`
-rows are effectively global. This phase makes every record user-scoped so the app
-serves many people with isolated workspaces, and closes security gaps 5–8 and 12.
+Shipped on branch `feature/auth`. Every record is now user-scoped; the app serves
+multiple isolated workspaces. Closed security gaps 5, 6, 8.
 
-**Estimated effort:** ~2–3 focused days. The wiring is mechanical; the risk is
-entirely in scoping *every* query by `userId` (a single miss is a data leak).
-Use a battle-tested library (Auth.js / NextAuth v5 with the Prisma adapter) — do
-not hand-roll auth, hashing, or session tokens.
+**As built:** Auth.js (NextAuth v5) + `@auth/prisma-adapter`, Google OAuth only,
+database session strategy, users stored in our Neon DB. Config in `src/auth.ts`;
+handler at `src/app/api/auth/[...nextauth]/route.ts`; client `SessionProvider` in
+`src/components/providers.tsx`. Authoritative checks in `src/lib/session.ts`
+(`getCurrentUserId` + `unauthorized` for routes, `requireUserIdOrRedirect` for
+server pages) — used in every data route and the `/tailor`, `/settings`,
+`/history` gates. `UserNav` (`src/components/user-nav.tsx`) shows name + sign-out
+on every page. Env: `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` in
+`.env.local` (local dev) — must also be set in Vercel for prod, with the prod
+Google redirect URI registered.
+
+**The schema/migration below is what was applied** (the live Neon DB was migrated
+non-destructively: add nullable `userId` → backfill existing rows to the first
+account → tighten to required). Kept for reference.
+
+**Original estimate (for context):** ~2–3 focused days.
 
 ### Schema diff
 

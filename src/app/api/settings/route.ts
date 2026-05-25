@@ -1,21 +1,26 @@
 import { prisma } from '@/lib/db';
 import { defaultCvHeader } from '@/lib/cv-header';
 import { validateShortField } from '@/lib/guardrails';
+import { getCurrentUserId, unauthorized } from '@/lib/session';
 
-// Single-user MVP: the contact header lives in one Settings row keyed by a
-// fixed id. The first GET seeds it from the default header constant.
-const SETTINGS_ID = 'singleton';
-
+// The contact header is one Settings row per user, keyed by userId. The first
+// GET for a user seeds it from the default header constant.
 export async function GET() {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const settings = await prisma.settings.upsert({
-    where: { id: SETTINGS_ID },
+    where: { userId },
     update: {},
-    create: { id: SETTINGS_ID, ...defaultCvHeader },
+    create: { userId, ...defaultCvHeader },
   });
   return Response.json(settings);
 }
 
 export async function PUT(req: Request) {
+  const userId = await getCurrentUserId();
+  if (!userId) return unauthorized();
+
   const { name, email, phone, linkedin, website } = await req.json();
   if (!name || !email) {
     return Response.json({ error: 'Name and email are required' }, { status: 400 });
@@ -29,10 +34,11 @@ export async function PUT(req: Request) {
     const r = validateShortField(value, label);
     if (!r.ok) return Response.json({ error: r.error }, { status: r.status });
   }
+
   const settings = await prisma.settings.upsert({
-    where: { id: SETTINGS_ID },
+    where: { userId },
     update: { name, email, phone, linkedin, website },
-    create: { id: SETTINGS_ID, name, email, phone, linkedin, website },
+    create: { userId, name, email, phone, linkedin, website },
   });
   return Response.json(settings);
 }

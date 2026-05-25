@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { UserNav } from "@/components/user-nav";
 import { CVHeader, defaultCvHeader } from "@/lib/cv-header";
 import { LIMITS } from "@/lib/guardrails";
 
@@ -91,6 +92,8 @@ export default function SettingsPage() {
             >
               History
             </Link>
+            <span className="mx-1 h-4 w-px bg-white/10" />
+            <UserNav />
           </div>
         </nav>
 

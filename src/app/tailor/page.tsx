@@ -7,6 +7,7 @@ import { CVUpload } from "@/components/cv-upload";
 import { JobDescriptionInput } from "@/components/job-description-input";
 import { TailoredResult } from "@/components/tailored-result";
 import { Logo } from "@/components/logo";
+import { UserNav } from "@/components/user-nav";
 import { MasterCVSummary, SupplementalDetail, TailorResult } from "@/lib/types";
 
 export default function TailorPage() {
@@ -215,6 +216,8 @@ export default function TailorPage() {
             >
               Settings
             </Link>
+            <span className="mx-1 h-4 w-px bg-white/10" />
+            <UserNav />
           </div>
         </nav>
         <div className="mb-8">
