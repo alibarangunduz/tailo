@@ -4,14 +4,22 @@ import { systemPrompt } from '@/lib/prompts';
 import { prisma } from '@/lib/db';
 import { validateTailorInput } from '@/lib/guardrails';
 import { getCurrentUserId, unauthorized } from '@/lib/session';
+import { rateLimitedResponse } from '@/lib/rate-limit';
 
 // Caps the model's output so a single run cannot balloon. The tailored CV is
 // budgeted to one page of JSON, so this sits comfortably above a valid response.
 const MAX_OUTPUT_TOKENS = 4_000;
 
+// Tailoring is the most expensive call in the app; cap how often one user can
+// trigger it (security hardening gap 7).
+const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+
 export async function POST(req: Request) {
   const userId = await getCurrentUserId();
   if (!userId) return unauthorized();
+
+  const limited = rateLimitedResponse('tailor', userId, RATE_LIMIT);
+  if (limited) return limited;
 
   const { masterCV, masterCVId, jobDescription, company, jobTitle, supplementalDetails } =
     await req.json();

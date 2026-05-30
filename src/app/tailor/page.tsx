@@ -205,6 +205,12 @@ export default function TailorPage() {
               Home
             </Link>
             <Link
+              href="/jobs"
+              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
+            >
+              Find Jobs
+            </Link>
+            <Link
               href="/history"
               className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
             >
