@@ -24,6 +24,12 @@ export default function Home() {
             Start tailoring
           </Link>
           <Link
+            href="/jobs"
+            className="rounded-xl border border-white/10 px-6 py-3 text-sm font-semibold text-gray-300 transition hover:border-white/20 hover:text-white"
+          >
+            Find jobs
+          </Link>
+          <Link
             href="/history"
             className="rounded-xl border border-white/10 px-6 py-3 text-sm font-semibold text-gray-300 transition hover:border-white/20 hover:text-white"
           >

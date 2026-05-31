@@ -6,22 +6,30 @@ An LLM-powered application that takes a user's master CV and a target job descri
 
 ## Current Status
 
-> **⏱️ Sync — last updated 2026-05-25 (resume here next session)**
+> **⏱️ Sync — last updated 2026-05-30 (resume here next session)**
 >
-> - **Branch:** `feature/auth` (Phase 6 committed). Earlier work is on
->   `feature/settings-page` (open PR: settings page + guardrails + security docs).
+> - **Branch:** `feature/auth` (Phase 6 committed; Find Jobs + rate limiter built
+>   on top, not yet committed). Earlier work is on `feature/settings-page`.
 > - **Done:** settings page · Zod input guardrails + output cap · **Phase 6 auth**
->   (Google OAuth, per-user data isolation, all routes gated, verified by tests).
+>   (Google OAuth, per-user data isolation, all routes gated, verified by tests) ·
+>   **Phase 8 Find Jobs** (CV-ranked job search via Adzuna, token-light — see
+>   Phase 8 below).
 > - **Live DB already migrated** for auth (User/Account/Session + required
->   `userId`); existing data backfilled to the owner account.
-> - **▶️ NEXT UP: rate limiting** (security gap 7) — an authenticated user can
->   still loop `/api/tailor` unbounded → token-cost abuse, the owner's main worry.
->   Plan: per-user + per-IP limits via Arcjet or Upstash Ratelimit. Then Phase 7
->   (credits/payments).
-> - **Before public deploy:** set `AUTH_SECRET` + Google creds in Vercel env, add
->   the prod Google redirect URI, confirm `trustHost`/`AUTH_URL` on Vercel.
+>   `userId`); existing data backfilled to the owner account. Find Jobs added **no**
+>   schema change (results are ephemeral).
+> - **Rate limiting (security gap 7) — PARTIALLY DONE.** Shipped a lightweight
+>   in-memory per-user limiter (`src/lib/rate-limit.ts`) on `/api/tailor` (20/min)
+>   and `/api/jobs/search` (30/min). Still TODO for production: back the same
+>   `checkRateLimit` signature with Redis/Upstash (in-memory is per-instance only).
+> - **▶️ NEXT UP:** production-grade rate limiting (Redis/Upstash) and/or Phase 7
+>   (credits/payments). Optional Find Jobs follow-ups: save/track found jobs,
+>   one-click tailor from a result.
+> - **Before public deploy:** set `AUTH_SECRET` + Google creds + `ADZUNA_APP_ID`/
+>   `ADZUNA_APP_KEY` in Vercel env, add the prod Google redirect URI, confirm
+>   `trustHost`/`AUTH_URL` on Vercel.
 > - **Local env (`.env.local`, git-ignored):** `AUTH_SECRET`, `AUTH_GOOGLE_ID`,
->   `AUTH_GOOGLE_SECRET` are set. Owner account: gunduzbaran175@gmail.com.
+>   `AUTH_GOOGLE_SECRET`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` are set. Owner account:
+>   gunduzbaran175@gmail.com.
 
 Phase 1 (MVP) is built and working: master CV upload/paste, saved master CVs
 (save, switch, rename, delete), job description input, Claude-powered tailoring
@@ -45,6 +53,9 @@ Recently shipped on top of the MVP:
   `Settings` table and threaded into the PDF export and the download filename,
   so the export no longer depends on a hardcoded constant or on parsing the name
   out of the master CV. See "Settings and the contact header" below.
+- **Find Jobs (job discovery):** a `/jobs` page that finds real openings ranked
+  against a saved master CV and links straight to them, deliberately token-light
+  (job retrieval spends zero LLM tokens). See Phase 8 below.
 
 ## Pre-Deployment Security Hardening
 
@@ -93,13 +104,14 @@ page, per Next 16 guidance (do not rely on proxy alone). Verified with raw
 6. 🟢 **No data isolation / ownership checks.** Every query is scoped to
    `session.user.id`; id-addressed routes verify ownership and return `404` (not
    `403`) for other users. `Settings` is now one row per user, keyed by `userId`.
-7. 🔴 **No rate limiting or concurrency limit. ← NEXT UP.** Still open. An
-   *authenticated* user can loop `/api/tailor` without limit, so token cost is
-   unbounded per user. This is the top remaining risk and directly matches the
-   owner's cost-abuse concern.
-   - Fix: per-user (and per-IP) rate limits + a concurrency cap. Candidates:
-     Arcjet (TS-native, Next-friendly) or Upstash Ratelimit. Smaller than full
-     credits and should land before any public exposure.
+7. 🟠 **Rate limiting — PARTIALLY DONE.** A lightweight in-memory per-user limiter
+   (`src/lib/rate-limit.ts`, fixed-window) now guards `/api/tailor` (20/min) and
+   `/api/jobs/search` (30/min), so a single user can no longer loop an expensive
+   endpoint unbounded. Caveat: state is per process, so on serverless/multi-instance
+   each instance counts independently — not a global limit yet.
+   - Remaining: back the same `checkRateLimit` signature with Upstash Ratelimit or
+     Redis for a true global limit (and optionally a per-IP limit + concurrency
+     cap). Callers do not change. Still smaller than full credits (Phase 7).
 8. 🟢 **Upload DoS (found during Phase 6).** `/api/master-cv/upload` ran the PDF
    parser for anonymous callers; now gated behind a session.
 9. 🟡 **CSRF posture for mutations.** Mitigated by Auth.js `SameSite=Lax` session
@@ -153,7 +165,12 @@ Applying to jobs requires tailoring your CV for each role. Doing this manually t
 
 ```env
 ANTHROPIC_API_KEY=
-DATABASE_URL=          # Neon PostgreSQL connection string
+DATABASE_URL=          # Neon PostgreSQL connection string (include ?sslmode=require)
+AUTH_SECRET=           # Auth.js session secret
+AUTH_GOOGLE_ID=        # Google OAuth client id
+AUTH_GOOGLE_SECRET=    # Google OAuth client secret
+ADZUNA_APP_ID=         # Find Jobs: free at developer.adzuna.com
+ADZUNA_APP_KEY=        # Find Jobs is disabled (clear 503) without these
 ```
 
 ---
@@ -634,6 +651,53 @@ of truth). Seed new users with a small free balance.
    configured, so local development and the single-user path keep working.
 6. Test: insufficient-balance rejection, a real debit per run, refund on failure,
    and replayed-webhook idempotency.
+
+## Phase 8 — Job Discovery (Find Jobs) ✅ DONE
+
+A new product direction: instead of starting from a job description the user
+already found, **Tailo finds the jobs for them**, ranked against a saved master
+CV, and links straight to each posting. This makes the master CV the hub of the
+whole flow (discover → tailor → export) rather than just an input to tailoring.
+
+**Hard constraint (owner's main worry): do not burn tokens to search.** The design
+keeps retrieval and ranking separate so the expensive model is never used to
+"search":
+
+- **Retrieval = Adzuna API, zero tokens.** Real listings (title, company,
+  location, salary, direct link) come from a job board, not an LLM. The CV is
+  **never** sent to the provider — only the built query terms (companies,
+  location, keywords). Adzuna has no employer-filter param, so targeted companies
+  are matched via its exact-phrase search (`what_phrase`); multiple `what` terms
+  are AND-ed and easily return zero, so keywords are not stacked onto a company
+  search (local CV ranking handles relevance there).
+- **CV profile = local, zero tokens.** `extractCvProfile` derives a bounded
+  keyword profile from the CV by frequency, so cost does not grow with CV size.
+- **Pre-filter = local, zero tokens.** `prefilter` scores listings by employer
+  match, location match, and CV keyword overlap, and keeps only a ~15-job
+  shortlist.
+- **Ranking = one cheap call.** Only the shortlist (short snippets, not full CVs
+  or descriptions) goes to a single `claude-haiku-4-5` call, output-capped, that
+  returns a fit score + one-line "why it fits" per role. Roughly half a cent per
+  search; a repeated identical search within 5 minutes is served from an in-memory
+  cache for **zero** cost. "Load more" pages the provider and re-ranks.
+
+**As built (no schema change — results are ephemeral):**
+
+- Provider behind a swappable interface: `src/lib/jobs/provider.ts`
+  (`JobProvider`, `RawJob`), `adzuna.ts` (fetch + map, `de` market), `rank.ts`
+  (`extractCvProfile`, `buildQuery`, `prefilter`).
+- Route: `src/app/api/jobs/search/route.ts` — auth + per-user rate limit +
+  guardrails (`validateJobSearchInput`) + owned-CV check, then retrieve →
+  pre-filter → one Haiku ranking call → cache. Missing `ADZUNA_*` returns a clear
+  503, not a crash.
+- UI: `src/app/jobs/{layout,page}.tsx` (auth-gated, auto-loads saved CVs with a
+  picker like the tailor page) and `src/components/job-{search-form,results,card}.tsx`.
+  A listing with no direct URL shows a flagged "search on the portal" fallback.
+- "Find Jobs" links added to the home and tailor nav.
+
+**Follow-ups (not done):** save/track found jobs (would add a schema + a saved-jobs
+page), one-click "tailor this" from a result, and a broader provider (e.g. JSearch
+for LinkedIn/Indeed coverage) swapped in behind `JobProvider`.
 
 ---
 

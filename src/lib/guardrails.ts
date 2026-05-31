@@ -18,6 +18,9 @@ export const LIMITS = {
   supplementalMaxItems: 20, // "fill the gap" notes per regenerate
   supplementalNoteChars: 1_000, // each requirement + note
   uploadBytes: 5 * 1024 * 1024, // 5 MB max PDF upload
+  companiesMaxItems: 10, // targeted companies per job search
+  locationChars: 100, // job search location text (e.g. "Berlin")
+  keywordsChars: 200, // job search keywords / sector text (e.g. "fintech")
 } as const;
 
 // Formats a number with comma thousands separators, independent of the server's
@@ -114,9 +117,37 @@ const uploadSchema = z
     path: ['size'],
   });
 
+// The job search payload. `companies` and `keywords` are optional (a user may
+// search by location alone); each company is a capped short field, and the count
+// is bounded so the built provider query stays small. `location` and `keywords`
+// are capped free text. The master CV is referenced by id and its ownership is
+// checked in the route, so it is not part of this schema.
+const jobSearchSchema = z.object({
+  companies: z
+    .array(shortField('Company'))
+    .max(LIMITS.companiesMaxItems, `Too many companies (max ${LIMITS.companiesMaxItems}).`)
+    .optional(),
+  location: z
+    .string()
+    .max(LIMITS.locationChars, `Location is too long (max ${LIMITS.locationChars} characters).`)
+    .optional(),
+  remote: z.boolean().optional(),
+  keywords: z
+    .string()
+    .max(LIMITS.keywordsChars, `Keywords are too long (max ${LIMITS.keywordsChars} characters).`)
+    .refine((v) => !looksAbusive(v), 'Keywords look invalid.')
+    .optional(),
+  page: z.number().int().min(1).max(50).optional(),
+});
+
 // Caps a single short free-text field (company, job title, CV name, etc.).
 export function validateShortField(value: unknown, label: string): GuardrailResult {
   return toResult(shortField(label).safeParse(value));
+}
+
+// Validates the full /api/jobs/search payload. Returns the first failure, or ok.
+export function validateJobSearchInput(input: unknown): GuardrailResult {
+  return toResult(jobSearchSchema.safeParse(input));
 }
 
 // Caps the master CV text (used by /api/tailor and /api/master-cv writes).

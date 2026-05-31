@@ -70,3 +70,28 @@ export interface TailorResult {
   tailoredCV: TailoredCVContent;
   strategyNotes: string;
 }
+
+// A single ranked job from a search. `url` is the direct listing link when the
+// provider supplies a usable one; when it does not, `url` is null and the client
+// renders a flagged "search on the portal" fallback instead.
+export interface JobListing {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  url: string | null;
+  salary: string | null;
+  // Short snippet from the provider, used in the card and the ranking call.
+  summary: string;
+  // 0 to 100 fit against the master CV, from the ranking pass.
+  matchScore: number;
+  // One concise line on why this role fits the candidate.
+  whyItFits: string;
+}
+
+// The shape returned by POST /api/jobs/search.
+export interface JobSearchResponse {
+  jobs: JobListing[];
+  // The page to request next for "Load more", or null when the source is exhausted.
+  nextPage: number | null;
+}
