@@ -133,6 +133,25 @@ be exported as a one-page, ATS-friendly PDF.
   untangled with a force-push.
 - Never force-push without explicit confirmation from the user.
 
+### Commit messages and versioning
+
+- Commit subjects follow Conventional Commits: `type(scope): summary`, e.g.
+  `feat(tailor): one-click tailoring from a job result`, `fix(pdf): keep long
+  company names on one line`. Types: `feat`, `fix`, `perf`, `refactor`, `test`,
+  `docs`, `ci`, `build`, `chore`. A breaking change adds `!` (`feat!:`) and a
+  `BREAKING CHANGE:` footer.
+- Every commit that changes app behavior bumps `version` in `package.json` (and
+  `package-lock.json`) in the same commit, per SemVer. While below 1.0.0:
+  `feat` bumps the minor (0.2.0 to 0.3.0); `fix` and `perf` bump the patch (0.2.0
+  to 0.2.1); a breaking change bumps the minor. From 1.0.0: breaking is major,
+  `feat` minor, `fix` patch. `test`, `docs`, `ci`, `build`, `chore` and
+  `refactor` do not bump.
+- Bump with `npm version <minor|patch> --no-git-tag-version` so both files stay
+  in sync, and add the change under the new version in `CHANGELOG.md` (newest
+  first, grouped as Added / Fixed / Changed).
+- Tag released versions `vX.Y.Z` when a PR merges to `main`, not on feature
+  branches.
+
 ## Common Pitfalls
 
 - Vercel AI SDK: use `streamText`, not `generateText`, for the tailoring endpoint.
