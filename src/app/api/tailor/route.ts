@@ -5,7 +5,7 @@ import { rateLimitedResponse } from "@/lib/rate-limit";
 import { cleanTailorOutput, streamTailor } from "@/lib/tailor";
 
 // Tailoring is the most expensive call in the app; cap how often one user can
-// trigger it (security hardening gap 7).
+// trigger it.
 const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 
 export async function POST(req: Request) {

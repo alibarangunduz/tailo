@@ -2,8 +2,8 @@
 
 The full picture for taking Tailo from a working app to a company that sells it
 to real users across the EU, securely, starting in Germany. The README roadmap
-is the short version; this file has the detail. `CV_TAILOR_APP_PLAN.md` is the
-build history up to now.
+is the short version; this file has the detail. What already shipped is in
+`CHANGELOG.md`; older design notes are in git history.
 
 **Not legal advice.** Items marked ⚖️ need a German lawyer or tax advisor to
 confirm before launch. The plan says what has to exist; they confirm the wording
@@ -99,7 +99,7 @@ and build in parallel.
 | 2. Safety | Input checks, injection defense, output grounding checks, global rate limiting, security headers | D |
 | 3. Data rights | Delete my account, export my data, retention jobs, legal pages drafted | C |
 | 4. Payments | Credit ledger, run lifecycle with reserve and refund, provider integration, checkout | E |
-| 5. Run quality and cost | Edge cases, prompt caching, formatting rules, eval baseline | G |
+| 5. Run quality and cost | Edge cases, output format rules and A4 ([9.3](#93-output-format-rules-before-launch)), prompt caching, eval baseline | G |
 | 6. Operations | Monitoring, alerts, backups, runbook, support | F |
 | 7. Landing and beta | Landing page and video, private beta with free credits | B, H |
 | 8. Public launch | All gates green, go/no-go review | all |
@@ -487,6 +487,26 @@ POST /api/tailor  (with an Idempotency-Key header from the client)
 - [x] **No hidden master CV creation** (0.3.0): the route only tailors from a
   saved master CV and reads its text from the database
 
+### 9.3 Output format rules (before launch)
+
+Sonnet 5.5 copies the master CV as written, which keeps it honest (in the pilot,
+Sonnet 4.6 merged roles and invented details) but also copies inconsistent
+formatting: a master CV that writes "July 2026 to Present" or puts " | " inside
+an education line comes out that way. The prompt has to normalize format without
+touching facts. Rules agreed with the owner:
+
+- [ ] Date ranges use an en dash: `July 2026 – Present`, `2018 – 2022`
+- [ ] One line per education entry, never more entries than the master CV has
+- [ ] At most one `Certifications: ...` line inside education
+- [ ] Company, job title and degree names exactly as in the master CV (no
+  "B.Sc." or "GmbH" unless the master CV writes it)
+- [ ] No merged roles: every role in the master CV that is kept stays its own
+  entry
+- [ ] Export on A4 instead of US Letter (the v1 format for Germany and the EU)
+- [ ] The eval's programmatic checks (`date_format`, `edu_format`,
+  `names_exact`) already grade these rules; run the full baseline after the
+  prompt change
+
 ---
 
 ## 10. Payments and credits
@@ -630,8 +650,8 @@ Rule: every saving is measured with the eval against quality before it ships.
   model provider, the payment provider and the domain registrar; a short list
   of who has access
 - [ ] **Public repository:** this repo is public. Keep personal data out of it
-  (an earlier version of `CV_TAILOR_APP_PLAN.md` and the old default header
-  contained the owner's contact details; they remain in git history), and do
+  (the old default header and the removed build plan file contained the
+  owner's contact details; they remain in git history), and do
   not publish details of unfixed vulnerabilities. Consider making the repo
   private before launch.
 - [ ] **Pre-launch security review:** OWASP Top 10 walkthrough, an automated scan
@@ -744,7 +764,7 @@ Decide these early; several block other work.
 | Payment provider | Merchant of record (Paddle, Lemon Squeezy) or Stripe + Stripe Tax | Merchant of record for v1 |
 | Model provider region | Anthropic API, Claude on Bedrock or Vertex in an EU region | EU region if the model is available there; re-run the eval first |
 | Free allowance | 1 to 5 runs | 3 runs |
-| Credit packs and prices | From cost per run × margin | Decide after caching is measured |
+| Credit packs and prices | From cost per run × margin | Start from about 20 runs for €5 and 100 for €20; decide after caching is measured |
 | Credit expiry | None, or a long fair period | No expiry |
 | History retention | Keep until deleted, or auto-delete | 12 months, then auto-delete |
 | Inactive account deletion | 12 to 36 months | 24 months with an email warning |

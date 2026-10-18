@@ -1,7 +1,7 @@
 // Auth.js (NextAuth v5) configuration. Users, accounts, and sessions are stored
 // in our own Neon database via the Prisma adapter (database session strategy),
-// so app data can foreign-key to User and the credit ledger (Phase 7) can join
-// to it directly. Google is the only sign-in provider for now; it reads
+// so app data and the planned credit ledger can foreign-key to User directly.
+// Google is the only sign-in provider for now; it reads
 // AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET (and AUTH_SECRET) from the environment.
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
