@@ -21,7 +21,7 @@ jobs:
       - run: npx next typegen
       - run: npm run lint
       - run: npm run typecheck
-      # Unit, integration and offline eval tests. Auth, Prisma, Adzuna and the
+      # Unit, integration and offline eval tests. Auth, Prisma and the
       # Anthropic models are mocked, so no secrets are needed here. The paid
       # eval (npm run eval:tailor) stays a manual step.
       - run: npm test

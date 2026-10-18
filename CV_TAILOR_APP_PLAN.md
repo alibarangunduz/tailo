@@ -6,7 +6,11 @@ An LLM-powered application that takes a user's master CV and a target job descri
 
 ## Current Status
 
-> **⏱️ Sync — last updated 2026-10-18 (resume here next session)**
+> **The live plan is now [LAUNCH_PLAN.md](LAUNCH_PLAN.md)** (v1 scope, security,
+> GDPR, payments and launch). This file is the build history; the sync block
+> below is from 2026-10-18 and is kept for context.
+>
+> **⏱️ Sync — last updated 2026-10-18**
 >
 > - **Branch:** `main` (Phase 6 and Phase 8 merged). Uncommitted on top: the
 >   Sonnet 5.5 switch, the inline CV editor, one-line PDF role headers, and the
@@ -38,8 +42,7 @@ An LLM-powered application that takes a user's master CV and a target job descri
 >   `ADZUNA_APP_KEY` in Vercel env, add the prod Google redirect URI, confirm
 >   `trustHost`/`AUTH_URL` on Vercel.
 > - **Local env (`.env.local`, git-ignored):** `AUTH_SECRET`, `AUTH_GOOGLE_ID`,
->   `AUTH_GOOGLE_SECRET`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` are set. Owner account:
->   gunduzbaran175@gmail.com.
+>   `AUTH_GOOGLE_SECRET`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` are set.
 
 Phase 1 (MVP) is built and working: master CV upload/paste, saved master CVs
 (save, switch, rename, delete), job description input, Claude-powered tailoring

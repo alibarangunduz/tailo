@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { UserNav } from "@/components/user-nav";
-import { CVHeader, defaultCvHeader } from "@/lib/cv-header";
+import { CVHeader, emptyCvHeader } from "@/lib/cv-header";
 import { LIMITS } from "@/lib/guardrails";
 
 // Fields shown in the form, in display order. Labels and hints are kept here so
@@ -36,7 +36,7 @@ const FIELDS: {
 ];
 
 export default function SettingsPage() {
-  const [form, setForm] = useState<CVHeader>(defaultCvHeader);
+  const [form, setForm] = useState<CVHeader>(emptyCvHeader);
   const [status, setStatus] = useState<"loading" | "idle" | "saving" | "saved" | "error">(
     "loading",
   );
@@ -45,7 +45,7 @@ export default function SettingsPage() {
     fetch("/api/settings")
       .then((res) => res.json())
       .then((s) => {
-        if (s && s.name) setForm(s);
+        if (s && typeof s.name === "string") setForm(s);
         setStatus("idle");
       })
       .catch(() => setStatus("error"));

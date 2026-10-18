@@ -1,18 +1,31 @@
 import { prisma } from '@/lib/db';
-import { defaultCvHeader } from '@/lib/cv-header';
+import { emptyCvHeader } from '@/lib/cv-header';
 import { validateShortField } from '@/lib/guardrails';
 import { getCurrentUserId, unauthorized } from '@/lib/session';
 
 // The contact header is one Settings row per user, keyed by userId. The first
-// GET for a user seeds it from the default header constant.
+// GET for a user seeds it with their own account name and email; the other
+// fields start empty for the user to fill in.
 export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return unauthorized();
 
+  const existing = await prisma.settings.findUnique({ where: { userId } });
+  if (existing) return Response.json(existing);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true },
+  });
   const settings = await prisma.settings.upsert({
     where: { userId },
     update: {},
-    create: { userId, ...defaultCvHeader },
+    create: {
+      userId,
+      ...emptyCvHeader,
+      name: user?.name ?? '',
+      email: user?.email ?? '',
+    },
   });
   return Response.json(settings);
 }

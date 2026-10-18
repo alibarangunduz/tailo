@@ -18,7 +18,7 @@ vi.mock('@ai-sdk/anthropic', () => ({ anthropic: vi.fn() }));
 let n = 0;
 let USER = '';
 
-const body = (over: Record<string, unknown> = {}) => ({ masterCV: MASTER_CV, ...JOB, ...over });
+const body = (over: Record<string, unknown> = {}) => ({ masterCVId: 'cv1', ...JOB, ...over });
 const post = (payload: unknown) =>
   POST(
     new Request('http://localhost/api/tailor', {
@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.mocked(anthropic).mockReset();
   USER = `tailor-user-${++n}`;
   signInAs(USER);
-  prisma.masterCV.create.mockResolvedValue({ id: 'created-cv' });
+  prisma.masterCV.findFirst.mockResolvedValue({ id: 'cv1', content: MASTER_CV });
   prisma.tailoredCV.create.mockResolvedValue({ id: 'tailored' });
 });
 
@@ -57,7 +57,7 @@ describe('POST /api/tailor', () => {
     const saved = prisma.tailoredCV.create.mock.calls[0][0].data;
     expect(saved).toMatchObject({
       userId: USER,
-      masterCVId: 'created-cv',
+      masterCVId: 'cv1',
       company: JOB.company,
       jobTitle: JOB.jobTitle,
       matchScore: 82,
@@ -67,25 +67,33 @@ describe('POST /api/tailor', () => {
     expect(JSON.parse(saved.gapAnalysis)).toEqual(result.gaps);
   });
 
-  it('creates a master CV named after the CV’s first line when none is selected', async () => {
+  it('loads the master CV scoped to the caller', async () => {
     modelReturning(JSON.stringify(sampleResult()));
     await (await post(body())).text();
-    await vi.waitFor(() => expect(prisma.masterCV.create).toHaveBeenCalledOnce());
-    expect(prisma.masterCV.create.mock.calls[0][0].data).toEqual({
-      name: 'Jordan Example',
-      content: MASTER_CV,
-      userId: USER,
-    });
+    expect(prisma.masterCV.findFirst.mock.calls[0][0].where).toEqual({ id: 'cv1', userId: USER });
   });
 
-  it('reuses a selected master CV the caller owns', async () => {
-    prisma.masterCV.findFirst.mockResolvedValue({ id: 'cv1' });
+  it('tailors the stored CV text, never text from the request body', async () => {
+    const model = modelReturning(JSON.stringify(sampleResult()));
+    await (await post(body({ masterCV: 'INJECTED BODY TEXT' }))).text();
+    const prompt = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(prompt).toContain('Northwind Payments GmbH');
+    expect(prompt).not.toContain('INJECTED BODY TEXT');
+  });
+
+  it('never creates a master CV on its own', async () => {
     modelReturning(JSON.stringify(sampleResult()));
-    await (await post(body({ masterCVId: 'cv1' }))).text();
+    await (await post(body())).text();
     await vi.waitFor(() => expect(prisma.tailoredCV.create).toHaveBeenCalledOnce());
-    expect(prisma.masterCV.findFirst.mock.calls[0][0].where).toEqual({ id: 'cv1', userId: USER });
     expect(prisma.masterCV.create).not.toHaveBeenCalled();
-    expect(prisma.tailoredCV.create.mock.calls[0][0].data.masterCVId).toBe('cv1');
+  });
+
+  it('requires a saved master CV, before calling the model', async () => {
+    const res = await post(body({ masterCVId: undefined, masterCV: MASTER_CV }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Save your master CV before tailoring.' });
+    expect(prisma.masterCV.findFirst).not.toHaveBeenCalled();
+    expect(anthropic).not.toHaveBeenCalled();
   });
 
   it('answers 404 for another user’s master CV, before calling the model', async () => {
@@ -97,7 +105,8 @@ describe('POST /api/tailor', () => {
 
   it('rejects invalid input before spending tokens', async () => {
     expect((await post(body({ company: '' }))).status).toBe(400);
-    expect((await post(body({ masterCV: 'a b '.repeat(LIMITS.cvChars) }))).status).toBe(413);
+    prisma.masterCV.findFirst.mockResolvedValue({ id: 'cv1', content: 'a b '.repeat(LIMITS.cvChars) });
+    expect((await post(body())).status).toBe(413);
     expect(anthropic).not.toHaveBeenCalled();
   });
 
@@ -109,15 +118,19 @@ describe('POST /api/tailor', () => {
     expect(JSON.stringify(model.doStreamCalls[0].prompt)).toContain('Banking: Two years at a bank');
   });
 
-  it('does not save, and does not crash, when the model returns broken JSON', async () => {
+  it('does not save, crash, or log CV content when the model returns broken JSON', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    modelReturning('{"matchScore": 80, "tailoredCV": {');
+    modelReturning('{"matchScore": 80, "tailoredCV": {"summary": "Senior backend engineer at Northwind');
     const res = await post(body());
     expect(res.status).toBe(200);
     await res.text();
     await vi.waitFor(() => expect(error).toHaveBeenCalled());
     expect(error.mock.calls[0][0]).toBe('Failed to save tailored CV to history:');
     expect(prisma.tailoredCV.create).not.toHaveBeenCalled();
+    // GDPR: the log line carries counts and error names, never model output.
+    const logged = JSON.stringify(error.mock.calls);
+    expect(logged).not.toContain('Northwind');
+    expect(logged).not.toContain('matchScore');
     error.mockRestore();
   });
 

@@ -15,14 +15,24 @@ export async function POST(req: Request) {
   const limited = rateLimitedResponse("tailor", userId, RATE_LIMIT);
   if (limited) return limited;
 
-  const {
-    masterCV,
-    masterCVId,
-    jobDescription,
-    company,
-    jobTitle,
-    supplementalDetails,
-  } = await req.json();
+  const { masterCVId, jobDescription, company, jobTitle, supplementalDetails } =
+    await req.json();
+
+  // Tailoring always runs on a master CV the user saved. The text comes from
+  // the database, not the request body, so the run and its history entry
+  // match what the user actually stored.
+  if (!masterCVId || typeof masterCVId !== "string") {
+    return Response.json(
+      { error: "Save your master CV before tailoring." },
+      { status: 400 },
+    );
+  }
+  const owned = await prisma.masterCV.findFirst({
+    where: { id: masterCVId, userId },
+    select: { id: true, content: true },
+  });
+  if (!owned) return Response.json({ error: "Not found" }, { status: 404 });
+  const masterCV = owned.content;
 
   // Guardrails: reject oversized or abusive input before spending any tokens.
   const check = validateTailorInput({
@@ -36,18 +46,6 @@ export async function POST(req: Request) {
     return Response.json({ error: check.error }, { status: check.status });
   }
 
-  // If the client points at a saved CV, it must be one this user owns; otherwise
-  // ignore it and fall through to creating a fresh CV in onFinish.
-  let ownedMasterCVId: string | null = null;
-  if (masterCVId) {
-    const owned = await prisma.masterCV.findFirst({
-      where: { id: masterCVId, userId },
-      select: { id: true },
-    });
-    if (!owned) return Response.json({ error: "Not found" }, { status: 404 });
-    ownedMasterCVId = owned.id;
-  }
-
   const result = streamTailor(
     { masterCV, jobDescription, company, jobTitle, supplementalDetails },
     {
@@ -55,27 +53,10 @@ export async function POST(req: Request) {
         const cleaned = cleanTailorOutput(text);
         try {
           const parsed = JSON.parse(cleaned);
-
-          let cvId = ownedMasterCVId;
-          if (!cvId) {
-            const firstLine = masterCV
-              .split("\n")
-              .map((l: string) => l.trim())
-              .find(Boolean);
-            const created = await prisma.masterCV.create({
-              data: {
-                name: firstLine?.slice(0, 60) || "Untitled CV",
-                content: masterCV,
-                userId,
-              },
-            });
-            cvId = created.id;
-          }
-
           await prisma.tailoredCV.create({
             data: {
               userId,
-              masterCVId: cvId,
+              masterCVId: owned.id,
               jobTitle,
               company,
               jobDescription,
@@ -86,11 +67,13 @@ export async function POST(req: Request) {
             },
           });
         } catch (err) {
-          console.error("Failed to save tailored CV to history:", err, {
+          // Counts and error names only: the model output and the JSON parse
+          // message both contain CV content, which must never reach the logs.
+          console.error("Failed to save tailored CV to history:", {
+            error: err instanceof Error ? err.name : "unknown",
             finishReason,
             outputTokens: usage.outputTokens,
             textLength: text.length,
-            tail: text.slice(-200),
           });
         }
       },

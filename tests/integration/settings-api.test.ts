@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, PUT } from '@/app/api/settings/route';
-import { defaultCvHeader } from '@/lib/cv-header';
 import { LIMITS } from '@/lib/guardrails';
 import { prisma, resetPrisma } from '../helpers/prisma-mock';
 import { signInAs } from '../helpers/auth-mock';
@@ -25,14 +24,39 @@ beforeEach(() => {
 });
 
 describe('GET /api/settings', () => {
-  it('seeds the caller’s row from the default header on first read', async () => {
+  it('returns the caller’s existing row without writing', async () => {
+    prisma.settings.findUnique.mockResolvedValue({ userId: USER, name: 'Jordan Example' });
+    const res = await GET();
+    expect(await res.json()).toMatchObject({ name: 'Jordan Example' });
+    expect(prisma.settings.findUnique).toHaveBeenCalledWith({ where: { userId: USER } });
+    expect(prisma.settings.upsert).not.toHaveBeenCalled();
+  });
+
+  it('seeds a new row from the caller’s own account name and email only', async () => {
+    prisma.settings.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ name: 'Jordan Example', email: 'jordan@example.com' });
     const res = await GET();
     expect(res.status).toBe(200);
+    expect(prisma.user.findUnique.mock.calls[0][0].where).toEqual({ id: USER });
     expect(prisma.settings.upsert).toHaveBeenCalledWith({
       where: { userId: USER },
       update: {},
-      create: { userId: USER, ...defaultCvHeader },
+      create: {
+        userId: USER,
+        name: 'Jordan Example',
+        email: 'jordan@example.com',
+        phone: '',
+        linkedin: '',
+        website: '',
+      },
     });
+  });
+
+  it('seeds empty fields when the account has no name', async () => {
+    prisma.settings.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ name: null, email: 'jordan@example.com' });
+    await GET();
+    expect(prisma.settings.upsert.mock.calls[0][0].create.name).toBe('');
   });
 });
 
