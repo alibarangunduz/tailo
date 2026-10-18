@@ -145,6 +145,35 @@ npm run dev
 
 Never commit `.env` or `.env.local`. They hold secrets and are git-ignored.
 
+## Testing
+
+```bash
+npm test             # unit, integration and offline eval tests (Vitest)
+npm run test:watch   # same, re-running on change
+npm run typecheck
+npm run lint
+```
+
+No test needs secrets, a database or network access. Auth, Prisma, Adzuna and
+the Claude models are mocked at the module boundary, while the real route
+handlers, guardrails, rate limiter, AI SDK streaming and PDF rendering run.
+GitHub Actions runs lint, typecheck and tests on every push to `main` and on
+every pull request.
+
+| Layer | Where | Covers |
+|---|---|---|
+| Unit | `tests/unit` | guardrails, rate limiter, prompt building, job ranking, Adzuna mapping, session helpers |
+| Integration | `tests/integration` | every API route; per-user scoping and 404 for other users' records; `/api/tailor` streaming and saving; PDF export (one page, selectable text) and upload round trip |
+| Component | `tests/components` | the inline CV editor |
+| Eval (offline) | `tests/eval` | the tailoring eval's graders, plus a known-good output graded through the real PDF render |
+
+`tests/integration/api-auth-guard.test.ts` finds every route under `src/app/api`
+automatically and checks that it returns 401 when signed out, without touching
+the database. A new route that skips the session check fails CI.
+
+The paid, model-in-the-loop eval stays manual: see
+[`evals/tailor/README.md`](evals/tailor/README.md).
+
 ## License
 
 MIT

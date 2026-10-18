@@ -42,6 +42,12 @@ neutral `win = 0.5` and are not judged.
 `fit_scale` (perf column) is the auto-fit content scale of the PDF: 0.85 means
 the CV was crammed to the minimum size, 1.18 means it was short enough to grow.
 
+## Offline tier
+
+`tests/eval/graders.test.ts` (part of `npm test`, free) pins down the graders
+above on synthetic outputs and grades a known-good output through the real PDF
+render. Run it first; the paid run below is for comparing models and prompts.
+
 ## Running
 
 ```bash
