@@ -16,6 +16,7 @@ import {
   StyleSheet,
   pdf,
 } from '@react-pdf/renderer';
+import PDFDocument from '@react-pdf/pdfkit';
 import { getDocumentProxy } from 'unpdf';
 import { TailorResult, TailoredCVContent } from './types';
 import { CVHeader, defaultCvHeader, projectUrl } from './cv-header';
@@ -121,7 +122,7 @@ function makeStyles(scale: number) {
       marginTop: u(7),
       position: 'relative',
     },
-    expTitle: { fontFamily: 'Helvetica-Bold', fontSize: u(10) },
+    expTitle: { fontFamily: 'Helvetica-Bold', fontSize: u(10), flexShrink: 0 },
     // Absolutely positioned across the full content width so it centers on the
     // page, independent of the title and date widths on either side.
     expCompany: {
@@ -132,7 +133,21 @@ function makeStyles(scale: number) {
       fontFamily: 'Helvetica-Bold',
       fontSize: u(10),
     },
-    expMeta: { flexDirection: 'row', alignItems: 'baseline' },
+    // Fallback when the page-centered company would collide with the title or
+    // dates: it takes the gap between them, still on the same line, and is cut
+    // with an ellipsis if even that is too narrow (the export reports it).
+    expCompanyInline: {
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 0,
+      marginHorizontal: u(10),
+      textAlign: 'center',
+      fontFamily: 'Helvetica-Bold',
+      fontSize: u(10),
+      maxLines: 1,
+      textOverflow: 'ellipsis',
+    },
+    expMeta: { flexDirection: 'row', alignItems: 'baseline', flexShrink: 0 },
     expLocation: { fontFamily: 'Helvetica-Oblique', fontSize: u(10), color: MUTED, marginRight: u(10) },
     expDates: { fontFamily: 'Helvetica-Bold', fontSize: u(10) },
 
@@ -155,6 +170,106 @@ function makeStyles(scale: number) {
 }
 
 type Styles = ReturnType<typeof makeStyles>;
+
+// Usable line width: US Letter (612pt) minus the left and right page padding.
+const CONTENT_WIDTH = 612 - 36 - 32;
+
+// Exact text widths from the same standard-font metrics the renderer uses.
+let measurer: PDFDocument | null = null;
+function textWidth(text: string, font: string, size: number): number {
+  measurer ??= new PDFDocument({ autoFirstPage: false });
+  // widthOfString uses the document's current font size, not a size option.
+  return measurer.font(font).fontSize(size).widthOfString(text);
+}
+
+// Smallest gap around an in-between company, and the smallest header font a
+// single row may shrink to (relative to the page scale) before its company is
+// cut instead. Small enough not to look different from the other rows.
+const MIN_COMPANY_GAP = 4;
+const MIN_HEADER_SHRINK = 0.92;
+// Measured widths are exact, but leave a hair of room so the renderer's own
+// line breaking never decides the text is a fraction too wide.
+const FIT_SLACK = 1;
+
+// Where the company goes on its role's single header line, and at what size.
+// Mirrors the expTitle/expCompany/expLocation/expDates styles:
+// - 'centered': centered on the page, as in the template
+// - 'between': centered in the gap between the title and the dates; when the
+//   gap is too narrow, the gaps tighten and the row's header text shrinks
+//   slightly (never below MIN_HEADER_SHRINK) so the company still fits
+// - 'truncated': even then it does not fit, so it is cut with an ellipsis
+interface HeaderLayout {
+  placement: 'centered' | 'between' | 'truncated';
+  // Font size for this row's title, company, location and dates.
+  size: number;
+  // Horizontal margin on each side of an in-between company.
+  gap: number;
+  // The company text to print: cut at a word boundary with an ellipsis when
+  // truncated (the renderer's own truncation hyphenates mid-word).
+  company: string;
+}
+
+// Drops whole words from the end until the text plus an ellipsis fits.
+function truncateToWidth(text: string, font: string, size: number, room: number): string {
+  const words = text.split(' ');
+  while (words.length > 1) {
+    words.pop();
+    const candidate = `${words.join(' ').replace(/[\s,;(]+$/, '')}…`;
+    if (textWidth(candidate, font, size) <= room) return candidate;
+  }
+  return '…';
+}
+
+function layoutHeader(
+  e: TailoredCVContent['experience'][number],
+  scale: number,
+): HeaderLayout {
+  const size = 10 * scale;
+  const gap = 10 * scale;
+  if (!e.company) return { placement: 'centered', size, gap, company: e.company };
+
+  // Widths at a 1pt font, so any row size is a simple multiple.
+  const unit = (text: string, font: string) => textWidth(text, font, 1);
+  const company = unit(e.company, 'Helvetica-Bold');
+  const title = unit(e.title, 'Helvetica-Bold');
+  const meta =
+    (e.location ? unit(e.location, 'Helvetica-Oblique') : 0) +
+    (e.dates ? unit(e.dates, 'Helvetica-Bold') : 0);
+  // The location's right margin is a fixed style gap, not text.
+  const locationGap = e.location ? gap : 0;
+
+  const side = (CONTENT_WIDTH - company * size) / 2;
+  if (title * size + gap <= side && meta * size + locationGap + gap <= side) {
+    return { placement: 'centered', size, gap, company: e.company };
+  }
+
+  const roomAt = (s: number, g: number) =>
+    CONTENT_WIDTH - (title + meta) * s - locationGap - 2 * g - FIT_SLACK;
+  if (company * size <= roomAt(size, gap)) {
+    return { placement: 'between', size, gap, company: e.company };
+  }
+
+  // Tighten the gaps, then shrink this row's text just enough to fit.
+  const minGap = MIN_COMPANY_GAP * scale;
+  const fitSize =
+    (CONTENT_WIDTH - locationGap - 2 * minGap - FIT_SLACK) /
+    (company + title + meta);
+  if (fitSize >= size * MIN_HEADER_SHRINK) {
+    return {
+      placement: 'between',
+      size: Math.min(size, fitSize),
+      gap: minGap,
+      company: e.company,
+    };
+  }
+  const minSize = size * MIN_HEADER_SHRINK;
+  return {
+    placement: 'truncated',
+    size: minSize,
+    gap: minGap,
+    company: truncateToWidth(e.company, 'Helvetica-Bold', minSize, roomAt(minSize, minGap)),
+  };
+}
 
 function SectionHeading({ children, styles }: { children: string; styles: Styles }) {
   return (
@@ -247,30 +362,44 @@ function CVDocument({
         {cv.experience.length > 0 ? (
           <View>
             <SectionHeading styles={styles}>Experience</SectionHeading>
-            {cv.experience.map((e, i) => (
-              <View key={i} wrap={false}>
-                <View style={styles.expRow}>
-                  <Text style={styles.expTitle}>{e.title}</Text>
-                  <Text style={styles.expCompany}>{e.company}</Text>
-                  <View style={styles.expMeta}>
-                    {e.location ? (
-                      <Text style={styles.expLocation}>{e.location}</Text>
+            {cv.experience.map((e, i) => {
+              const header = layoutHeader(e, scale);
+              const size = { fontSize: header.size };
+              return (
+                <View key={i} wrap={false}>
+                  <View style={styles.expRow}>
+                    <Text style={[styles.expTitle, size]}>{e.title}</Text>
+                    {e.company ? (
+                      <Text
+                        style={
+                          header.placement === 'centered'
+                            ? [styles.expCompany, size]
+                            : [styles.expCompanyInline, size, { marginHorizontal: header.gap }]
+                        }
+                      >
+                        {header.company}
+                      </Text>
                     ) : null}
-                    {e.dates ? <Text style={styles.expDates}>{e.dates}</Text> : null}
+                    <View style={styles.expMeta}>
+                      {e.location ? (
+                        <Text style={[styles.expLocation, size]}>{e.location}</Text>
+                      ) : null}
+                      {e.dates ? <Text style={[styles.expDates, size]}>{e.dates}</Text> : null}
+                    </View>
                   </View>
+                  {e.subsections.map((sub, j) => (
+                    <View key={j}>
+                      {sub.heading ? (
+                        <Text style={styles.subHeading}>{sub.heading}</Text>
+                      ) : null}
+                      {sub.bullets.map((b, k) => (
+                        <Bullet key={k} styles={styles}>{b}</Bullet>
+                      ))}
+                    </View>
+                  ))}
                 </View>
-                {e.subsections.map((sub, j) => (
-                  <View key={j}>
-                    {sub.heading ? (
-                      <Text style={styles.subHeading}>{sub.heading}</Text>
-                    ) : null}
-                    {sub.bullets.map((b, k) => (
-                      <Bullet key={k} styles={styles}>{b}</Bullet>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
 
@@ -338,21 +467,53 @@ function renderAt(result: TailorResult, scale: number, header: CVHeader): Promis
   return pdf(<CVDocument result={result} scale={scale} header={header} />).toBlob();
 }
 
+export interface CvPdfFit {
+  blob: Blob;
+  // Content scale the CV rendered at (MIN_SCALE to MAX_SCALE).
+  scale: number;
+  pages: number;
+  // Roles whose company did not fit on the header line and was cut with an
+  // ellipsis, as "Title, Company", so the UI can ask the user to shorten them.
+  truncatedHeaders: string[];
+}
+
+function truncatedHeaders(result: TailorResult, scale: number): string[] {
+  return sanitizeCv(result.tailoredCV)
+    .experience.filter((e) => layoutHeader(e, scale).placement === 'truncated')
+    .map((e) => `${e.title}, ${e.company}`);
+}
+
 // Renders the CV at the largest content scale that still fits on one page.
 // Taller content produces more pages, so page count is monotonic in scale and a
-// binary search converges in a handful of fast renders.
-export async function generateCvPdf(
+// binary search converges in a handful of fast renders. Also reports the scale
+// and page count, which the eval (evals/tailor) grades.
+export async function fitCvPdf(
   result: TailorResult,
   header: CVHeader = defaultCvHeader,
-): Promise<Blob> {
+): Promise<CvPdfFit> {
   // If the largest scale already fits, the CV is short: use it to fill the page.
   const maxBlob = await renderAt(result, MAX_SCALE, header);
-  if ((await countPages(maxBlob)) === 1) return maxBlob;
+  if ((await countPages(maxBlob)) === 1) {
+    return {
+      blob: maxBlob,
+      scale: MAX_SCALE,
+      pages: 1,
+      truncatedHeaders: truncatedHeaders(result, MAX_SCALE),
+    };
+  }
 
   // If even the smallest scale overflows, the content is too long to fit on one
   // page: return the most compact render as a best effort.
   let fitBlob = await renderAt(result, MIN_SCALE, header);
-  if ((await countPages(fitBlob)) > 1) return fitBlob;
+  const minPages = await countPages(fitBlob);
+  if (minPages > 1) {
+    return {
+      blob: fitBlob,
+      scale: MIN_SCALE,
+      pages: minPages,
+      truncatedHeaders: truncatedHeaders(result, MIN_SCALE),
+    };
+  }
 
   // Binary search for the largest one-page scale between the bounds.
   let lo = MIN_SCALE;
@@ -368,5 +529,17 @@ export async function generateCvPdf(
     }
   }
 
-  return fitBlob;
+  return {
+    blob: fitBlob,
+    scale: lo,
+    pages: 1,
+    truncatedHeaders: truncatedHeaders(result, lo),
+  };
+}
+
+export async function generateCvPdf(
+  result: TailorResult,
+  header: CVHeader = defaultCvHeader,
+): Promise<Blob> {
+  return (await fitCvPdf(result, header)).blob;
 }

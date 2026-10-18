@@ -6,10 +6,20 @@ An LLM-powered application that takes a user's master CV and a target job descri
 
 ## Current Status
 
-> **⏱️ Sync — last updated 2026-05-30 (resume here next session)**
+> **⏱️ Sync — last updated 2026-10-18 (resume here next session)**
 >
-> - **Branch:** `feature/auth` (Phase 6 committed; Find Jobs + rate limiter built
->   on top, not yet committed). Earlier work is on `feature/settings-page`.
+> - **Branch:** `main` (Phase 6 and Phase 8 merged). Uncommitted on top: the
+>   Sonnet 5.5 switch, the inline CV editor, one-line PDF role headers, and the
+>   tailoring eval (see "Model, editor and eval (2026-10-18)" below).
+> - **Model:** tailoring now runs on `claude-sonnet-5-5` at medium effort via
+>   the shared `streamTailor()` in `src/lib/tailor.ts` (route and eval both use
+>   it). Sonnet 5.5 always thinks and thinking counts against
+>   `maxOutputTokens`, so the cap is 16,000 (4,000 truncated the JSON).
+> - **▶️ NEXT UP (tailoring quality):** prompt formatting rules agreed with the
+>   owner: en dash date ranges, one line per education entry, one
+>   `Certifications:` line allowed, company/title/degree names exactly as in the
+>   master CV, no merged roles. Then run the eval (`npm run eval:tailor`, see
+>   `evals/tailor/README.md`); a checks-only run on Sonnet 5.5 is about $1.40.
 > - **Done:** settings page · Zod input guardrails + output cap · **Phase 6 auth**
 >   (Google OAuth, per-user data isolation, all routes gated, verified by tests) ·
 >   **Phase 8 Find Jobs** (CV-ranked job search via Adzuna, token-light — see
@@ -21,7 +31,7 @@ An LLM-powered application that takes a user's master CV and a target job descri
 >   in-memory per-user limiter (`src/lib/rate-limit.ts`) on `/api/tailor` (20/min)
 >   and `/api/jobs/search` (30/min). Still TODO for production: back the same
 >   `checkRateLimit` signature with Redis/Upstash (in-memory is per-instance only).
-> - **▶️ NEXT UP:** production-grade rate limiting (Redis/Upstash) and/or Phase 7
+> - **Then:** production-grade rate limiting (Redis/Upstash) and/or Phase 7
 >   (credits/payments). Optional Find Jobs follow-ups: save/track found jobs,
 >   one-click tailor from a result.
 > - **Before public deploy:** set `AUTH_SECRET` + Google creds + `ADZUNA_APP_ID`/
@@ -56,6 +66,40 @@ Recently shipped on top of the MVP:
 - **Find Jobs (job discovery):** a `/jobs` page that finds real openings ranked
   against a saved master CV and links straight to them, deliberately token-light
   (job retrieval spends zero LLM tokens). See Phase 8 below.
+- **Sonnet 5.5, CV editor and tailoring eval:** see the next section.
+
+### Model, editor and eval (2026-10-18)
+
+- **Model upgrade to `claude-sonnet-5-5`.** The tailoring call lives in
+  `src/lib/tailor.ts` (`streamTailor`, `buildTailorPrompt`, `cleanTailorOutput`),
+  shared by `/api/tailor` and the eval so the eval tests exactly what ships.
+  Effort is `medium`; `maxOutputTokens` is 16,000 because thinking tokens count
+  against it. A 3-case pilot against Sonnet 4.6 (same prompt, same master CV):
+  5.5 won all 3 on the pairwise judge, mainly on honesty. 4.6 merged the in-tech
+  roles into one "Senior" role and invented details (Kubernetes deployments,
+  SQS, "working German"). 5.5 took ~20 s per CV against ~50 s, at $0.042 to
+  $0.052 per run.
+- **Faithful copying exposed formatting gaps.** 4.6 normalized formatting on its
+  own (en dashes, "B.Sc."); 5.5 copies the master CV as written ("July 2026 to
+  Present", " | " inside education lines, which the renderer then split into one
+  line per field). The fix is explicit formatting rules in the prompt (NEXT UP
+  above), not a different model.
+- **Inline CV editor** (`src/components/cv-editor.tsx`): an Edit toggle on the
+  result lets the user change the summary, skills, roles, bullets, projects and
+  education. Edits stay on the client and feed the PDF export and Copy text;
+  "Reset edits" restores the generated version.
+- **One-line role headers in the PDF** (`src/lib/cv-pdf.tsx`): header widths are
+  measured with `@react-pdf/pdfkit` standard-font metrics. The company is page
+  centered when it fits, otherwise placed between title and dates (gaps tighten
+  to 4pt and the row may shrink to 92%), and only then cut at a word boundary.
+  `fitCvPdf()` reports cut rows and the result view shows a notice asking the
+  user to shorten them in the editor.
+- **Tailoring eval** (`evals/tailor/`, `npm run eval:tailor`): 30 job
+  descriptions from history (stratified by fit and role type) against the
+  current master CV. Programmatic checks (valid JSON, one page, budget, date
+  format, education format, exact names, skills found in the CV) plus an
+  Opus 5.5 pairwise judge against a frozen Sonnet 4.6 reference. Fixtures and
+  results are git-ignored (personal data). The full run (~$9) is not done yet.
 
 ## Pre-Deployment Security Hardening
 
@@ -153,7 +197,7 @@ Applying to jobs requires tailoring your CV for each role. Doing this manually t
 |------|---------|
 | Next.js 16 (App Router) | Framework, TypeScript |
 | Vercel AI SDK | LLM streaming, structured output |
-| Claude API (Anthropic) | `claude-sonnet-4-6` via Vercel AI SDK |
+| Claude API (Anthropic) | `claude-sonnet-5-5` (medium effort) via Vercel AI SDK |
 | Neon (PostgreSQL) | Database, serverless PostgreSQL |
 | Prisma | ORM, schema management |
 | unpdf | Text extraction from uploaded PDF CVs |
@@ -284,7 +328,7 @@ export async function POST(req: Request) {
   const { masterCV, jobDescription, company, jobTitle } = await req.json();
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: anthropic('claude-sonnet-4-6'), // original plan; now claude-sonnet-5-5 via src/lib/tailor.ts
     system: systemPrompt,
     prompt: `
 ## Master CV
@@ -400,6 +444,12 @@ client-side and is dynamically imported so `@react-pdf/renderer` stays out of
 the SSR and initial bundle. The contact header values come from the `Settings`
 record (see below), with `defaultCvHeader` in `src/lib/cv-header.ts` as the seed.
 
+Each role header stays on a single line: the company is centered on the page
+when it fits, otherwise placed between the title and the dates, with the row
+tightening and shrinking slightly before the company is cut at a word boundary.
+`fitCvPdf()` returns the rendered blob plus the auto-fit scale, page count and
+any cut headers; `generateCvPdf()` is a thin wrapper returning the blob.
+
 The download filename is built in `handleDownloadPdf` (`src/components/tailored-result.tsx`)
 as `name_cv_year_company`, for example `ali_baran_gunduz_cv_2026_tesla.pdf`. The
 name comes from the configured settings header (the name printed on the
@@ -434,8 +484,10 @@ keeps the `CVHeader` type, the `defaultCvHeader` seed, and the project-link map.
 
 **Result Display (src/components/tailored-result.tsx):**
 - Formatted tailored CV
+- Edit toggle with an inline editor (`cv-editor.tsx`) and "Reset edits"
 - Copy to clipboard button
-- Download PDF button (one-page, ATS-friendly export)
+- Download PDF button (one-page, ATS-friendly export; shows a notice when a
+  role header had to be shortened)
 - "Strategy Notes" expandable section explaining what was changed and why
 
 ### Weekend Timeline
@@ -607,8 +659,9 @@ webhooks and edge cases.
 
 ### Unit economics
 
-A `claude-sonnet-4-6` run is roughly 3–6k input + 2–3k output tokens, on the order
-of ~$0.04–0.07 per generation (verify against current Anthropic pricing). A
+A `claude-sonnet-5-5` run measured 5–8k input + 3–4k output tokens (output
+includes thinking), about $0.042–0.052 per generation at $2/$10 per million
+tokens (eval pilot, 2026-10-18). A
 "fill the gap" regenerate costs about the same again. Price credit packs with
 margin on top of that (e.g. 20 runs / $5, 100 / $20). Recommended go-to-market:
 **freemium (a few free runs) + credit packs** — simplest to build, and credits

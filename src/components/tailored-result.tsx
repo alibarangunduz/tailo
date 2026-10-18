@@ -5,6 +5,7 @@ import { SupplementalDetail, TailorResult } from '@/lib/types';
 import { CVHeader, defaultCvHeader } from '@/lib/cv-header';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
+import { CvEditor } from './cv-editor';
 
 // Lowercase, strip accents (Gündüz to gunduz), and join word runs with
 // underscores for use in a download filename.
@@ -28,9 +29,24 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
   const [copied, setCopied] = useState(false);
   const [showStrategy, setShowStrategy] = useState(false);
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'error'>('idle');
+  // Roles whose company name was cut off on its one-line header in the last export.
+  const [truncatedHeaders, setTruncatedHeaders] = useState<string[]>([]);
   // Contact header for the exported PDF, configured on the settings page.
   // Falls back to the default constant until the fetch resolves.
   const [header, setHeader] = useState<CVHeader>(defaultCvHeader);
+  // Editable copy of the generated CV. Copy text and the PDF export read from
+  // this draft, so the user can fix wording before exporting.
+  const [cv, setCv] = useState(result.tailoredCV);
+  const [editing, setEditing] = useState(false);
+  // A new result (e.g. after Regenerate) replaces the draft. Adjusting state
+  // during render on prop change, per the React docs, avoids an extra effect pass.
+  const [source, setSource] = useState(result);
+  if (source !== result) {
+    setSource(result);
+    setCv(result.tailoredCV);
+    setEditing(false);
+  }
+  const edited = cv !== result.tailoredCV;
 
   useEffect(() => {
     fetch('/api/settings')
@@ -42,8 +58,6 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
         // ignore: fall back to the default header
       });
   }, []);
-
-  const cv = result.tailoredCV;
 
   const plainText = [
     cv.summary,
@@ -74,8 +88,10 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
     setPdfState('working');
     try {
       // Dynamic import keeps @react-pdf/renderer out of the SSR and initial bundle.
-      const { generateCvPdf } = await import('@/lib/cv-pdf');
-      const blob = await generateCvPdf(result, header);
+      const { fitCvPdf } = await import('@/lib/cv-pdf');
+      const fit = await fitCvPdf({ ...result, tailoredCV: cv }, header);
+      const blob = fit.blob;
+      setTruncatedHeaders(fit.truncatedHeaders);
       const url = URL.createObjectURL(blob);
       // Filename: name_cv_year_company, e.g. ali_baran_gunduz_cv_2026_tesla.pdf
       // The name is the CV header name (what is printed on the document), not
@@ -106,6 +122,20 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Tailored CV</h2>
           <div className="flex gap-2">
+            {edited && (
+              <button
+                onClick={() => setCv(result.tailoredCV)}
+                className="rounded-lg px-3 py-1.5 text-xs text-gray-400 transition hover:text-gray-200"
+              >
+                Reset edits
+              </button>
+            )}
+            <button
+              onClick={() => setEditing(!editing)}
+              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-white/20"
+            >
+              {editing ? 'Done editing' : 'Edit'}
+            </button>
             <button
               onClick={handleCopy}
               className="rounded-lg bg-white/10 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-white/20"
@@ -126,60 +156,81 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
           </div>
         </div>
 
-        <div className="space-y-5 text-sm text-gray-300">
-          <p className="leading-relaxed">{cv.summary}</p>
+        {truncatedHeaders.length > 0 && (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            <p>
+              Each role header is kept to one line in the PDF, so the company name was shortened
+              with &quot;...&quot; for: {truncatedHeaders.join('; ')}. Click Edit to shorten the
+              company or job title, then download again.
+            </p>
+            <button
+              onClick={() => setTruncatedHeaders([])}
+              className="text-amber-200/70 transition hover:text-amber-100"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
-          {cv.skills.length > 0 && (
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Skills</h3>
-              <div className="space-y-1">
-                {cv.skills.map((s, i) => (
-                  <p key={i}>
-                    <span className="font-medium text-white">{s.category}:</span> {s.items}
-                  </p>
-                ))}
+        {editing ? (
+          <CvEditor cv={cv} onChange={setCv} />
+        ) : (
+          <div className="space-y-5 text-sm text-gray-300">
+            <p className="leading-relaxed">{cv.summary}</p>
+
+            {cv.skills.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Skills</h3>
+                <div className="space-y-1">
+                  {cv.skills.map((s, i) => (
+                    <p key={i}>
+                      <span className="font-medium text-white">{s.category}:</span> {s.items}
+                    </p>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {cv.experience.length > 0 && (
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Experience</h3>
-              <div className="space-y-4">
-                {cv.experience.map((e, i) => (
-                  <div key={i}>
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-semibold text-white">{e.title}</span>
-                      <span className="text-gray-400">{e.company}</span>
-                      <span className="text-gray-500">·</span>
-                      <span className="text-gray-500">{e.location}</span>
-                      <span className="ml-auto text-xs text-gray-500">{e.dates}</span>
-                    </div>
-                    {e.subsections.map((sub, j) => (
-                      <div key={j} className="mt-2">
-                        {sub.heading && (
-                          <p className="mb-1 text-xs font-medium text-gray-400">{sub.heading}</p>
-                        )}
-                        <ul className="space-y-1 pl-4">
-                          {sub.bullets.map((b, k) => (
-                            <li key={k} className="list-disc text-gray-300">{b}</li>
-                          ))}
-                        </ul>
+            {cv.experience.length > 0 && (
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Experience</h3>
+                <div className="space-y-4">
+                  {cv.experience.map((e, i) => (
+                    <div key={i}>
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-semibold text-white">{e.title}</span>
+                        <span className="text-gray-400">{e.company}</span>
+                        <span className="text-gray-500">·</span>
+                        <span className="text-gray-500">{e.location}</span>
+                        <span className="ml-auto text-xs text-gray-500">{e.dates}</span>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                      {e.subsections.map((sub, j) => (
+                        <div key={j} className="mt-2">
+                          {sub.heading && (
+                            <p className="mb-1 text-xs font-medium text-gray-400">{sub.heading}</p>
+                          )}
+                          <ul className="space-y-1 pl-4">
+                            {sub.bullets.map((b, k) => (
+                              <li key={k} className="list-disc text-gray-300">{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {cv.education && (
-            <div>
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Education</h3>
-              <p>{cv.education}</p>
-            </div>
-          )}
-        </div>
+            {cv.education && (
+              <div>
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500">Education</h3>
+                <p>{cv.education}</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           onClick={() => setShowStrategy(!showStrategy)}

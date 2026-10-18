@@ -45,3 +45,7 @@ CV Template Tailo.docx
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# eval fixtures and run output (contain personal CV data)
+/evals/tailor/fixtures/
+/.claude/hillclimb/
