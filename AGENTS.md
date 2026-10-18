@@ -13,6 +13,11 @@ description; the app uses Claude via the Vercel AI SDK to analyze the gap and
 generate a tailored CV, a match score, and a gap analysis. The tailored CV can
 be exported as a one-page, ATS-friendly PDF.
 
+**Product focus:** Tailo does tailoring only, and stays strictly true to the
+user's master CV. Do not add job search or other side features unless
+`LAUNCH_PLAN.md` is changed to include them first. Users are in the EU, so data
+protection rules (see Security) apply to every change.
+
 ## Tech Stack
 
 - Next.js 16 (App Router), TypeScript, `src/` directory
@@ -32,6 +37,10 @@ be exported as a one-page, ATS-friendly PDF.
   thinks and thinking counts against `maxOutputTokens`, so keep that cap generous.
 - `/api/tailor` streams the response with `toTextStreamResponse()` and persists the
   result to the database inside the `onFinish` callback.
+- `/api/tailor` only runs on a saved master CV (`masterCVId`, ownership checked)
+  and reads the CV text from the database, never from the request body.
+- No route creates records the user did not explicitly save (no implicit
+  master CVs, no hidden copies of pasted text).
 - Database operations use the Prisma client from `src/lib/db.ts`.
 - System prompts live in `src/lib/prompts.ts`, never inline in route handlers.
 - PDF text extraction uses `unpdf` in `src/lib/pdf-parser.ts`.
@@ -122,8 +131,9 @@ be exported as a one-page, ATS-friendly PDF.
   git-ignored and must stay that way.
 - `.claude/settings.local.json` and `CV Template Tailo.docx` are git-ignored.
 - Never hardcode API keys or connection strings in source files.
-- `LAUNCH_PLAN.md` is the live plan for v1 (security, GDPR, payments, launch);
-  `CV_TAILOR_APP_PLAN.md` is the build history.
+- `LAUNCH_PLAN.md` is the single live plan (v1 scope, security, GDPR, payments,
+  launch); `CHANGELOG.md` records what shipped. Keep both current instead of
+  adding new planning documents.
 - Never log personal data: no CV text, job descriptions or model output in logs
   or error reports; log ids, status codes and counts only.
 - The repo is public: no real CV data, contact details or unfixed vulnerability

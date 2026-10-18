@@ -1,4 +1,4 @@
-// Per-user request throttling (security hardening gap 7). A lightweight in-memory
+// Per-user request throttling. A lightweight in-memory
 // fixed-window limiter: enough to stop a signed-in user from looping an expensive
 // endpoint (/api/tailor) in a tight loop.
 //

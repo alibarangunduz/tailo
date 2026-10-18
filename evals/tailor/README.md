@@ -48,6 +48,18 @@ the CV was crammed to the minimum size, 1.18 means it was short enough to grow.
 above on synthetic outputs and grades a known-good output through the real PDF
 render. Run it first; the paid run below is for comparing models and prompts.
 
+## Results so far
+
+3-case pilot (2026-10-18), same prompt and master CV: Sonnet 5.5 won all 3
+pairwise judgments against the Sonnet 4.6 reference, mainly on honesty. 4.6
+merged roles and invented details (tools and language levels not in the CV); 5.5
+copied the master CV faithfully, including its inconsistent formatting, which the
+output format rules in `LAUNCH_PLAN.md` (9.3) address. 5.5 took about 20 s per
+CV against about 50 s, at $0.042 to $0.052 per run.
+
+Cost of a run over all 30 cases: about $1.40 for checks only on Sonnet 5.5,
+about $9 with the Opus judge. The full baseline has not been run yet.
+
 ## Running
 
 ```bash

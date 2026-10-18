@@ -48,8 +48,8 @@ never a rasterized image.
 The layout lives in `src/lib/cv-pdf.tsx`. The contact header (name, email,
 phone, LinkedIn, website) is configured on the **Settings** page (`/settings`)
 and stored in the database, so the exported PDF uses values the user controls
-rather than parsing them out of the master CV. `src/lib/cv-header.ts` holds the
-type and the default values used to seed an empty settings record.
+rather than parsing them out of the master CV. A new user's header starts with
+their own account name and email; the other fields start empty.
 
 Each role header (title, company, location, dates) always stays on one line.
 Widths are measured with the renderer's own font metrics: the company is
@@ -114,7 +114,9 @@ task, design and open decision, is in [LAUNCH_PLAN.md](LAUNCH_PLAN.md). In short
 6. **Payments and credits:** VAT-handling provider, append-only ledger, atomic
    spend, refunds on failure, webhook idempotency, free-allowance abuse limits
 7. **Run lifecycle and edge cases:** idempotent runs that survive disconnects,
-   retries, timeouts and parallel requests
+   retries, timeouts and parallel requests; output format rules (en dash date
+   ranges, one line per education entry, names exactly as in the master CV, no
+   merged roles) and A4 export, graded by a full eval baseline
 8. **Delete my account and export my data,** in one click each
 9. **Smarter token usage without lowering quality:** prompt caching of the
    system prompt and master CV, identical-request reuse, measured with the eval
@@ -127,9 +129,7 @@ task, design and open decision, is in [LAUNCH_PLAN.md](LAUNCH_PLAN.md). In short
 - [ ] CV variants: two pages and a detailed version (academia, research,
   medicine, senior management); templates for professions beyond software
 - [ ] Locales: German UI first, regional CV formats (Lebenslauf, UK CV, US
-  resume), A4 and local date formats per region
-- [ ] Prompt formatting rules: en dash date ranges, one line per education
-  entry, a single Certifications line, names exactly as in the master CV
+  resume), paper size and local date formats per region
 - [ ] Embed the exact template fonts (Nunito, Spectral), which also fixes
   non-Latin characters
 - [ ] Email magic link sign-in next to Google
