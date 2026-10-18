@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { redirect } from 'next/navigation';
 import { getCurrentUserId, requireUserIdOrRedirect, unauthorized } from '@/lib/session';
-import { projectUrl } from '@/lib/cv-header';
 import { auth, signInAs } from '../helpers/auth-mock';
 
 vi.mock('@/auth', () => import('../helpers/auth-mock'));
@@ -43,14 +42,7 @@ describe('session helpers', () => {
 
   it('requireUserIdOrRedirect sends a signed-out user to sign in, keeping the target', async () => {
     signInAs(null);
-    await expect(requireUserIdOrRedirect('/jobs?x=1')).rejects.toThrow('NEXT_REDIRECT');
-    expect(redirect).toHaveBeenCalledWith('/signin?callbackUrl=%2Fjobs%3Fx%3D1');
-  });
-});
-
-describe('projectUrl', () => {
-  it('matches a registered project by case-insensitive substring', () => {
-    expect(projectUrl('Tailo: AI CV tailoring')).toBe('https://github.com/alibarangunduz/tailo');
-    expect(projectUrl('Unknown project')).toBeUndefined();
+    await expect(requireUserIdOrRedirect('/history?x=1')).rejects.toThrow('NEXT_REDIRECT');
+    expect(redirect).toHaveBeenCalledWith('/signin?callbackUrl=%2Fhistory%3Fx%3D1');
   });
 });

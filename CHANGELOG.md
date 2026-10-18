@@ -4,6 +4,33 @@ All notable changes to Tailo. Versions follow [SemVer](https://semver.org/) and
 commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/);
 see "Commit messages and versioning" in AGENTS.md.
 
+## [0.3.0] - 2026-10-19
+
+### Removed
+
+- **Find Jobs** (Adzuna job search, the `/jobs` page, `/api/jobs/search` and
+  the Haiku ranking call). Tailo now focuses on tailoring only. The
+  `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` environment variables are no longer used.
+- The hardcoded default contact header and project link, which put the owner's
+  contact details into every new user's settings and PDF.
+
+### Changed
+
+- **Breaking:** `/api/tailor` requires `masterCVId` and tailors the saved CV
+  text from the database; the request body's CV text is ignored. The route no
+  longer creates a master CV on its own. The tailor page saves new or edited
+  CV text first ("Save CV and tailor").
+- A new user's PDF header is seeded from their own account name and email.
+
+### Fixed
+
+- `/api/tailor` no longer writes model output (CV content) to the server log
+  when saving a result fails.
+
+### Added
+
+- `LAUNCH_PLAN.md`: the full v1 launch plan.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

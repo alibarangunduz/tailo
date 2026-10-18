@@ -25,6 +25,7 @@ function model(): ModelMock {
 }
 
 export const prisma = {
+  user: model(),
   masterCV: model(),
   tailoredCV: model(),
   settings: model(),
@@ -34,7 +35,7 @@ export const prisma = {
 // Clears calls and stubs between tests. $transaction runs its operations, as the
 // array form of the real one does.
 export function resetPrisma() {
-  for (const m of [prisma.masterCV, prisma.tailoredCV, prisma.settings]) {
+  for (const m of [prisma.user, prisma.masterCV, prisma.tailoredCV, prisma.settings]) {
     for (const fn of Object.values(m)) fn.mockReset();
   }
   prisma.$transaction.mockReset();
@@ -45,6 +46,7 @@ export function resetPrisma() {
 export function allWhereClauses(): { model: string; method: string; where: unknown }[] {
   const out: { model: string; method: string; where: unknown }[] = [];
   for (const [name, m] of Object.entries({
+    user: prisma.user,
     masterCV: prisma.masterCV,
     tailoredCV: prisma.tailoredCV,
     settings: prisma.settings,

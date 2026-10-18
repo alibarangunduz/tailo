@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   LIMITS,
   validateCvText,
-  validateJobSearchInput,
   validateShortField,
   validateTailorInput,
   validateUpload,
@@ -117,29 +116,6 @@ describe('validateShortField and validateCvText', () => {
   it('rejects non-strings', () => {
     expect(validateShortField(42, 'Name').ok).toBe(false);
     expect(validateCvText({ text: 'x' }).ok).toBe(false);
-  });
-});
-
-describe('validateJobSearchInput', () => {
-  it('accepts an empty search (location-only searches are allowed)', () => {
-    expect(validateJobSearchInput({})).toEqual({ ok: true });
-  });
-
-  it('caps the company count', () => {
-    const r = validateJobSearchInput({
-      companies: Array(LIMITS.companiesMaxItems + 1).fill('Acme'),
-    });
-    expect(r).toMatchObject({ ok: false, status: 413 });
-  });
-
-  it('rejects an out-of-range page', () => {
-    expect(validateJobSearchInput({ page: 0 }).ok).toBe(false);
-    expect(validateJobSearchInput({ page: 51 }).ok).toBe(false);
-  });
-
-  it('rejects abusive keywords', () => {
-    expect(validateJobSearchInput({ keywords: 'a'.repeat(150) }).ok).toBe(true);
-    expect(validateJobSearchInput({ keywords: Array(301).fill('go').join(' ') }).ok).toBe(false);
   });
 });
 

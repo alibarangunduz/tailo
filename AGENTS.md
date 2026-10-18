@@ -76,7 +76,8 @@ be exported as a one-page, ATS-friendly PDF.
   `#1155CC`, US Letter, tight margins.
 - The PDF contact header is per-user: stored in the `Settings` table, edited at
   `/settings`, fetched in `tailored-result.tsx` and passed into `generateCvPdf`.
-  `src/lib/cv-header.ts` holds the `CVHeader` type and `defaultCvHeader` seed.
+  `src/lib/cv-header.ts` holds the `CVHeader` type and `emptyCvHeader`; a new
+  user's row is seeded from their own account name and email, never a constant.
 - Built-in `Helvetica` and `Times-Roman` are used as stand-ins for the template's
   Nunito and Spectral fonts. Registering the real fonts is a known follow-up.
 - The system prompt enforces a one-page content budget so generated content fits.

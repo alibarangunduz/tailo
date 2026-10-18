@@ -19,7 +19,7 @@ import {
 import PDFDocument from '@react-pdf/pdfkit';
 import { getDocumentProxy } from 'unpdf';
 import { TailorResult, TailoredCVContent } from './types';
-import { CVHeader, defaultCvHeader, projectUrl } from './cv-header';
+import { CVHeader, emptyCvHeader } from './cv-header';
 
 // Colors decoded from the .docx (word/document.xml + theme).
 const HEADING_BLUE = '#3C78D8'; // section headings
@@ -162,9 +162,7 @@ function makeStyles(scale: number) {
 
     // Projects: name + technologies on one line, description below.
     project: { fontSize: u(8.5), lineHeight: 1.4, marginBottom: u(3) },
-    // Bold black, no underline: applies whether the project name renders as
-    // plain text or as a clickable Link.
-    projectName: { fontFamily: 'Helvetica-Bold', color: '#000000', textDecoration: 'none' },
+    projectName: { fontFamily: 'Helvetica-Bold', color: '#000000' },
     projectTech: { fontFamily: 'Helvetica-Oblique', color: MUTED },
   });
 }
@@ -407,16 +405,9 @@ function CVDocument({
           <View>
             <SectionHeading styles={styles}>Projects</SectionHeading>
             {cv.projects.map((p, i) => {
-              const url = projectUrl(p.name);
               return (
                 <Text key={i} style={styles.project}>
-                  {url ? (
-                    <Link style={styles.projectName} src={url}>
-                      {p.name}
-                    </Link>
-                  ) : (
-                    <Text style={styles.projectName}>{p.name}</Text>
-                  )}
+                  <Text style={styles.projectName}>{p.name}</Text>
                   {p.technologies ? (
                     <Text style={styles.projectTech}>{` (${p.technologies})`}</Text>
                   ) : null}
@@ -489,7 +480,7 @@ function truncatedHeaders(result: TailorResult, scale: number): string[] {
 // and page count, which the eval (evals/tailor) grades.
 export async function fitCvPdf(
   result: TailorResult,
-  header: CVHeader = defaultCvHeader,
+  header: CVHeader = emptyCvHeader,
 ): Promise<CvPdfFit> {
   // If the largest scale already fits, the CV is short: use it to fill the page.
   const maxBlob = await renderAt(result, MAX_SCALE, header);
@@ -539,7 +530,7 @@ export async function fitCvPdf(
 
 export async function generateCvPdf(
   result: TailorResult,
-  header: CVHeader = defaultCvHeader,
+  header: CVHeader = emptyCvHeader,
 ): Promise<Blob> {
   return (await fitCvPdf(result, header)).blob;
 }

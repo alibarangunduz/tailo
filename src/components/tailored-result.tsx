@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SupplementalDetail, TailorResult } from '@/lib/types';
-import { CVHeader, defaultCvHeader } from '@/lib/cv-header';
+import { CVHeader, emptyCvHeader } from '@/lib/cv-header';
 import { MatchScore } from './match-score';
 import { GapAnalysis } from './gap-analysis';
 import { CvEditor } from './cv-editor';
@@ -32,8 +32,8 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
   // Roles whose company name was cut off on its one-line header in the last export.
   const [truncatedHeaders, setTruncatedHeaders] = useState<string[]>([]);
   // Contact header for the exported PDF, configured on the settings page.
-  // Falls back to the default constant until the fetch resolves.
-  const [header, setHeader] = useState<CVHeader>(defaultCvHeader);
+  // Empty until the fetch resolves.
+  const [header, setHeader] = useState<CVHeader>(emptyCvHeader);
   // Editable copy of the generated CV. Copy text and the PDF export read from
   // this draft, so the user can fix wording before exporting.
   const [cv, setCv] = useState(result.tailoredCV);
@@ -52,10 +52,10 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
     fetch('/api/settings')
       .then((res) => res.json())
       .then((s) => {
-        if (s && s.name) setHeader(s);
+        if (s && typeof s.name === 'string') setHeader(s);
       })
       .catch(() => {
-        // ignore: fall back to the default header
+        // ignore: the PDF renders without a contact header
       });
   }, []);
 
@@ -93,7 +93,7 @@ export function TailoredResult({ result, company, onRegenerate, isRegenerating }
       const blob = fit.blob;
       setTruncatedHeaders(fit.truncatedHeaders);
       const url = URL.createObjectURL(blob);
-      // Filename: name_cv_year_company, e.g. ali_baran_gunduz_cv_2026_tesla.pdf
+      // Filename: name_cv_year_company, e.g. jane_doe_cv_2026_acme.pdf
       // The name is the CV header name (what is printed on the document), not
       // the contact blob from the master CV first line.
       const parts = [

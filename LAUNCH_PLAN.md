@@ -94,7 +94,7 @@ and build in parallel.
 
 | Phase | What | Gate |
 |---|---|---|
-| 0. Scope cleanup | Remove Find Jobs, the hardcoded personal header and the hidden master CV creation (this branch, 0.3.0) | |
+| 0. Scope cleanup ✅ | Removed Find Jobs, the hardcoded personal header and the hidden master CV creation (0.3.0) | |
 | 1. Foundations | Company setup started; staging and production environments; EU regions; Prisma migrations; logging cleanup | A (started) |
 | 2. Safety | Input checks, injection defense, output grounding checks, global rate limiting, security headers | D |
 | 3. Data rights | Delete my account, export my data, retention jobs, legal pages drafted | C |
@@ -234,10 +234,10 @@ from this table. Keep it current when the schema changes.
 
 ### 5.4 Engineering work
 
-- [ ] **No personal data in logs.** Today `/api/tailor` logs the last 200
-  characters of the model output when saving fails; that is CV content. Log
-  only ids, status codes, token counts and lengths. Add a lint rule or a test
-  that fails on logging request bodies.
+- [~] **No personal data in logs.** Fixed in 0.3.0 for `/api/tailor` (it logged
+  the tail of the model output, which is CV content); a test now fails if CV
+  text reaches the log. Still to do: the same rule for every route, and a lint
+  rule that fails on logging request bodies.
 - [ ] **Minimize OAuth data:** Tailo only needs the identity from Google. Stop
   persisting `access_token`, `refresh_token` and `id_token` (an Auth.js adapter
   wrapper or the `linkAccount` event that clears them), and request only the
@@ -484,8 +484,8 @@ POST /api/tailor  (with an Idempotency-Key header from the client)
   offered to be saved into the master CV
 - [ ] **History reload:** an old result renders even after the output format
   changes (version the stored JSON)
-- [ ] **Remove the hidden master CV creation** (done in 0.3.0): the route only
-  tailors from a saved master CV
+- [x] **No hidden master CV creation** (0.3.0): the route only tailors from a
+  saved master CV and reads its text from the database
 
 ---
 

@@ -20,6 +20,10 @@ export default function TailorPage() {
   const [parseError, setParseError] = useState(false);
   const [cvName, setCvName] = useState("My CV");
   const [cvLoaded, setCvLoaded] = useState(false);
+  // The CV text as last saved, so unsaved edits can be detected. Tailoring
+  // only runs on a saved CV.
+  const [savedContent, setSavedContent] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [savedCVs, setSavedCVs] = useState<MasterCVSummary[]>([]);
   // Details from the last "fill the gap" regenerate, offered for saving into
   // the master CV once the regenerate succeeds.
@@ -60,6 +64,7 @@ export default function TailorPage() {
       const cv = await res.json();
       if (cv && cv.id) {
         setMasterCV(cv.content);
+        setSavedContent(cv.content);
         setMasterCVId(cv.id);
         setCvName(cv.name);
         setCvLoaded(true);
@@ -99,7 +104,12 @@ export default function TailorPage() {
       });
   }, []);
 
-  const handleSaveCV = async (name: string, content: string) => {
+  // Saves the CV and returns its id, or null when the save was rejected.
+  const handleSaveCV = async (
+    name: string,
+    content: string,
+  ): Promise<string | null> => {
+    setSaveError(null);
     const res = await fetch("/api/master-cv", {
       method: masterCVId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,11 +117,23 @@ export default function TailorPage() {
         masterCVId ? { id: masterCVId, name, content } : { name, content },
       ),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.id) {
+      setSaveError(data.error ?? "Could not save your master CV.");
+      return null;
+    }
     setMasterCVId(data.id);
+    setSavedContent(content);
     setCvLoaded(true);
     refreshCVList();
+    return data.id;
   };
+
+  const needsSave = !masterCVId || masterCV !== savedContent;
+
+  // Tailoring runs on the saved CV, so new text or unsaved edits are saved first.
+  const ensureSaved = async (): Promise<string | null> =>
+    needsSave ? handleSaveCV(cvName, masterCV) : masterCVId;
 
   // Switch to a different previously saved CV.
   const handleSelectCV = (id: string) => {
@@ -123,6 +145,7 @@ export default function TailorPage() {
     setMasterCV("");
     setCvName("My CV");
     setMasterCVId(null);
+    setSavedContent(null);
     setCvLoaded(false);
   };
 
@@ -138,27 +161,30 @@ export default function TailorPage() {
     }
   };
 
-  const handleTailor = () => {
+  const handleTailor = async () => {
+    const id = await ensureSaved();
+    if (!id) return;
     setResult(null);
     setParseError(false);
     setSavableDetails([]);
     pendingDetailsRef.current = [];
     complete("", {
-      body: { masterCV, masterCVId, jobDescription, company, jobTitle },
+      body: { masterCVId: id, jobDescription, company, jobTitle },
     });
   };
 
   // Re-run the tailor with extra details the user confirmed for specific gaps.
-  const handleRegenerate = (details: SupplementalDetail[]) => {
+  const handleRegenerate = async (details: SupplementalDetail[]) => {
     if (details.length === 0) return;
+    const id = await ensureSaved();
+    if (!id) return;
     setResult(null);
     setParseError(false);
     setSavableDetails([]);
     pendingDetailsRef.current = details;
     complete("", {
       body: {
-        masterCV,
-        masterCVId,
+        masterCVId: id,
         jobDescription,
         company,
         jobTitle,
@@ -203,12 +229,6 @@ export default function TailorPage() {
               className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
             >
               Home
-            </Link>
-            <Link
-              href="/jobs"
-              className="rounded-lg px-3 py-1.5 text-sm text-gray-400 transition hover:bg-white/5 hover:text-white"
-            >
-              Find Jobs
             </Link>
             <Link
               href="/history"
@@ -279,8 +299,15 @@ export default function TailorPage() {
               disabled={!canTailor || isLoading}
               className="w-full rounded-xl bg-white py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {isLoading ? "Tailoring..." : "Tailor CV"}
+              {isLoading
+                ? "Tailoring..."
+                : needsSave
+                  ? "Save CV and tailor"
+                  : "Tailor CV"}
             </button>
+            {saveError && (
+              <p className="text-sm text-red-400">{saveError}</p>
+            )}
           </div>
 
           <div>

@@ -27,9 +27,8 @@ comes from your master CV or from details you confirmed yourself.
 
 - **Next.js 16** + TypeScript (App Router)
 - **Vercel AI SDK** with Claude — `claude-sonnet-5-5` for tailoring (medium
-  effort), `claude-haiku-4-5` for the cheap job-ranking pass
+  effort)
 - **Auth.js (NextAuth v5)** + `@auth/prisma-adapter` — Google OAuth, per-user data
-- **Adzuna API** — real job listings for the Find Jobs feature (zero LLM tokens)
 - **PostgreSQL** via Neon — generation history and master CV storage
 - **Prisma** ORM
 - **unpdf** — text extraction from uploaded PDF CVs
@@ -58,29 +57,6 @@ centered on the page when it fits, otherwise it sits between the title and the
 dates, tightening the gaps and shrinking that row slightly if needed. Only when
 it still does not fit is it cut at a word boundary, and the app then asks you
 to shorten it in the editor and export again.
-
-## Find Jobs
-
-> **Frozen.** Tailo now focuses on tailoring only (see Roadmap). Find Jobs gets
-> no new features and is slated for removal.
-
-The **Find Jobs** page (`/jobs`) turns Tailo from a CV editor into a job-hunt
-starting point. You pick a saved master CV, enter targeted companies (e.g. SAP,
-N26) and a location (Berlin, remote Germany), optionally a sector keyword like
-"fintech", and get a ranked list of real openings linked straight to the posting.
-
-It is designed to be cheap on purpose: **searching for jobs spends zero LLM
-tokens.** Listings come from the Adzuna API, the CV is distilled into a keyword
-profile locally, and a local pre-filter narrows the results to a short shortlist.
-Only that shortlist is sent to one small `claude-haiku-4-5` call to rank fit and
-write a one-line "why it fits" per role — roughly half a cent per search, and
-zero on a repeated search within five minutes (results are cached). Targeted
-companies are matched with Adzuna's exact-phrase employer search, and a listing
-with no usable direct link falls back to a flagged portal search instead.
-
-The provider sits behind a small `JobProvider` interface
-(`src/lib/jobs/provider.ts`), so the source can be swapped (Adzuna to a broader
-aggregator) without touching the ranking or UI.
 
 ## Why I Built This
 
@@ -124,8 +100,8 @@ first), so data protection is a core requirement, not an add-on.
 The detailed plan for launching Tailo as a company across the EU, with every
 task, design and open decision, is in [LAUNCH_PLAN.md](LAUNCH_PLAN.md). In short:
 
-1. **Scope cleanup:** remove Find Jobs, the hardcoded personal header and the
-   hidden master CV creation
+1. ~~**Scope cleanup:** remove Find Jobs, the hardcoded personal header and the
+   hidden master CV creation~~ (done in 0.3.0)
 2. **Company and legal:** entity, tax, Impressum, privacy policy, terms,
    withdrawal rules for digital services, EU AI Act boundaries
 3. **EU data protection (GDPR):** data inventory, DPAs with every processor, EU
@@ -163,7 +139,7 @@ task, design and open decision, is in [LAUNCH_PLAN.md](LAUNCH_PLAN.md). In short
 
 ### Out of scope
 
-- Find Jobs (Adzuna search): being removed
+- Find Jobs (Adzuna search): removed in 0.3.0
 - Company culture intelligence and semantic job matching
 - Selling to employers or recruiters to screen candidates (high-risk under the
   EU AI Act)
@@ -181,8 +157,6 @@ npm install
 #   AUTH_SECRET=your-auth-secret
 #   AUTH_GOOGLE_ID=your-google-oauth-client-id
 #   AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
-#   ADZUNA_APP_ID=your-adzuna-app-id           (free at developer.adzuna.com)
-#   ADZUNA_APP_KEY=your-adzuna-app-key          (Find Jobs is disabled without it)
 
 npx prisma generate
 npx prisma db push
@@ -200,15 +174,15 @@ npm run typecheck
 npm run lint
 ```
 
-No test needs secrets, a database or network access. Auth, Prisma, Adzuna and
-the Claude models are mocked at the module boundary, while the real route
+No test needs secrets, a database or network access. Auth, Prisma and the
+Claude models are mocked at the module boundary, while the real route
 handlers, guardrails, rate limiter, AI SDK streaming and PDF rendering run.
 GitHub Actions runs lint, typecheck and tests on every push to `main` and on
 every pull request.
 
 | Layer | Where | Covers |
 |---|---|---|
-| Unit | `tests/unit` | guardrails, rate limiter, prompt building, job ranking, Adzuna mapping, session helpers |
+| Unit | `tests/unit` | guardrails, rate limiter, prompt building, session helpers |
 | Integration | `tests/integration` | every API route; per-user scoping and 404 for other users' records; `/api/tailor` streaming and saving; PDF export (one page, selectable text) and upload round trip |
 | Component | `tests/components` | the inline CV editor |
 | Eval (offline) | `tests/eval` | the tailoring eval's graders, plus a known-good output graded through the real PDF render |

@@ -9,7 +9,7 @@ interface CVUploadProps {
   onChange: (text: string) => void;
   name: string;
   onNameChange: (name: string) => void;
-  onSave: (name: string, content: string) => Promise<void>;
+  onSave: (name: string, content: string) => Promise<unknown>;
   isSaved: boolean;
   savedCVs: MasterCVSummary[];
   selectedId: string | null;

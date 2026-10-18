@@ -1,6 +1,6 @@
 // Per-user request throttling (security hardening gap 7). A lightweight in-memory
 // fixed-window limiter: enough to stop a signed-in user from looping an expensive
-// endpoint (/api/tailor, /api/jobs/search) in a tight loop.
+// endpoint (/api/tailor) in a tight loop.
 //
 // Caveat: state lives in the process, so on a multi-instance or serverless
 // deployment each instance counts independently. For production-grade global
@@ -13,7 +13,7 @@ interface Window {
 }
 
 // Bucket name to per-user window. A bucket isolates one endpoint's limit from
-// another's, so a tailor request does not consume a job-search allowance.
+// another's, so one endpoint's traffic does not consume another's allowance.
 const buckets = new Map<string, Map<string, Window>>();
 
 export interface RateLimitConfig {
