@@ -6,13 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval:tailor": "node --env-file=.env --env-file=.env.local --import tsx evals/tailor/run-eval.mjs --flow .claude/hillclimb/tailor"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.78",
     "@ai-sdk/react": "^3.0.186",
     "@auth/prisma-adapter": "^2.11.2",
     "@prisma/client": "^5.22.0",
+    "@react-pdf/pdfkit": "^5.1.1",
     "@react-pdf/renderer": "^4.5.1",
     "ai": "^6.0.184",
     "next": "16.2.6",
@@ -31,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

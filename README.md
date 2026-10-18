@@ -17,6 +17,8 @@ experience.
 - Reframes bullet points using the language of the job description
 - Scores your match across technical skills, experience, and seniority
 - Flags gaps honestly with actionable suggestions
+- Lets you edit the tailored CV inline (summary, skills, roles, bullets,
+  projects, education) before copying or exporting it
 - Exports the tailored CV as a one-page, ATS-friendly PDF
 - Saves multiple master CVs and switches between them in one click
 - Stores every version so you can track what you sent where
@@ -27,8 +29,8 @@ experience.
 ## Tech Stack
 
 - **Next.js 16** + TypeScript (App Router)
-- **Vercel AI SDK** with Claude — `claude-sonnet-4-6` for tailoring,
-  `claude-haiku-4-5` for the cheap job-ranking pass
+- **Vercel AI SDK** with Claude — `claude-sonnet-5-5` for tailoring (medium
+  effort), `claude-haiku-4-5` for the cheap job-ranking pass
 - **Auth.js (NextAuth v5)** + `@auth/prisma-adapter` — Google OAuth, per-user data
 - **Adzuna API** — real job listings for the Find Jobs feature (zero LLM tokens)
 - **PostgreSQL** via Neon — generation history and master CV storage
@@ -52,6 +54,13 @@ phone, LinkedIn, website) is configured on the **Settings** page (`/settings`)
 and stored in the database, so the exported PDF uses values the user controls
 rather than parsing them out of the master CV. `src/lib/cv-header.ts` holds the
 type and the default values used to seed an empty settings record.
+
+Each role header (title, company, location, dates) always stays on one line.
+Widths are measured with the renderer's own font metrics: the company is
+centered on the page when it fits, otherwise it sits between the title and the
+dates, tightening the gaps and shrinking that row slightly if needed. Only when
+it still does not fit is it cut at a word boundary, and the app then asks you
+to shorten it in the editor and export again.
 
 ## Find Jobs
 
@@ -93,6 +102,17 @@ while keeping the human in control of the final version.
 - [x] Find Jobs: CV-ranked job search via Adzuna, token-light by design
 - [~] Per-user rate limiting (in-memory limiter shipped; production-grade
   Redis/Upstash backing still to do)
+- [x] Tailoring model upgraded to Claude Sonnet 5.5: in a pilot comparison it
+  stayed truer to the master CV than Sonnet 4.6 and ran about 2.5x faster at
+  similar cost
+- [x] Inline editor for the tailored CV; edits feed the PDF export and copy text
+- [x] One-line role headers in the PDF, with a notice when a company name had
+  to be shortened
+- [~] Tailoring eval (`evals/tailor`): format, one-page and honesty checks plus a
+  pairwise judge, for comparing models and prompts before shipping; full
+  baseline run still to do
+- [ ] Prompt formatting rules: en dash date ranges, one line per education
+  entry, a single Certifications line, names exactly as in the master CV
 - [ ] Save and track jobs found in search (currently results are live only)
 - [ ] One-click: tailor a CV directly from a Find Jobs result
 - [ ] Credits and payments: users buy credits and spend them per tailoring run

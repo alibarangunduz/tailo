@@ -28,7 +28,8 @@ be exported as a one-page, ATS-friendly PDF.
 ## Architecture Decisions
 
 - All LLM calls go through the Vercel AI SDK `streamText()`, never raw fetch to
-  Anthropic. The model is `anthropic('claude-sonnet-4-6')`.
+  Anthropic. The model is `anthropic('claude-sonnet-5-5')` (latest Sonnet). It always
+  thinks and thinking counts against `maxOutputTokens`, so keep that cap generous.
 - `/api/tailor` streams the response with `toTextStreamResponse()` and persists the
   result to the database inside the `onFinish` callback.
 - Database operations use the Prisma client from `src/lib/db.ts`.
