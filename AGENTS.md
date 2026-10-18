@@ -64,8 +64,8 @@ be exported as a one-page, ATS-friendly PDF.
   size/type caps in one `LIMITS` object plus a `looksAbusive` padding check.
   Enforced server-side on every write/generate route; `LIMITS` re-used on the
   client for `maxLength`. `/api/tailor` also sets `maxOutputTokens`.
-- ⚠️ NOT yet done: rate limiting / per-user request throttling (security gap 7,
-  the next task). An authenticated user can currently loop `/api/tailor`.
+- Rate limiting is in-memory per instance (`src/lib/rate-limit.ts`); a global
+  Redis-backed limiter is still to do (LAUNCH_PLAN.md section 13).
 
 ## PDF Export
 
@@ -121,8 +121,12 @@ be exported as a one-page, ATS-friendly PDF.
   git-ignored and must stay that way.
 - `.claude/settings.local.json` and `CV Template Tailo.docx` are git-ignored.
 - Never hardcode API keys or connection strings in source files.
-- See `CV_TAILOR_APP_PLAN.md` "Pre-Deployment Security Hardening" for the live
-  gap checklist. Next up: rate limiting (gap 7).
+- `LAUNCH_PLAN.md` is the live plan for v1 (security, GDPR, payments, launch);
+  `CV_TAILOR_APP_PLAN.md` is the build history.
+- Never log personal data: no CV text, job descriptions or model output in logs
+  or error reports; log ids, status codes and counts only.
+- The repo is public: no real CV data, contact details or unfixed vulnerability
+  details in committed files.
 
 ## Git Workflow
 

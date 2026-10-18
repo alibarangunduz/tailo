@@ -1,18 +1,15 @@
 # Tailo
 
-> Find the jobs that fit you, then tailor your CV to each one in seconds —
-> powered by LLMs, without fabricating a single skill.
+> Tailor your CV to any job in seconds and stay 100 percent true to your master
+> CV. Powered by Claude, without fabricating a single skill.
 
 ## What It Does
 
-Tailo closes the loop on a job hunt: it **finds** roles that match your master
-CV and links you straight to them, then **tailors** your CV to whichever one you
-apply for, analyzing the gap and honestly highlighting your most relevant
-experience.
+Tailo tailors your CV to the job you are applying for: it analyzes the gap
+between your master CV and the job description, then highlights your most
+relevant experience honestly. Nothing is invented: every fact in the tailored CV
+comes from your master CV or from details you confirmed yourself.
 
-- **Find Jobs:** enter targeted companies and a location (e.g. onsite Berlin,
-  remote Germany) and get real listings ranked against your master CV, each with
-  a direct link to apply
 - Reorders sections to put the most relevant experience first
 - Reframes bullet points using the language of the job description
 - Scores your match across technical skills, experience, and seniority
@@ -64,6 +61,9 @@ to shorten it in the editor and export again.
 
 ## Find Jobs
 
+> **Frozen.** Tailo now focuses on tailoring only (see Roadmap). Find Jobs gets
+> no new features and is slated for removal.
+
 The **Find Jobs** page (`/jobs`) turns Tailo from a CV editor into a job-hunt
 starting point. You pick a saved master CV, enter targeted companies (e.g. SAP,
 N26) and a location (Berlin, remote Germany), optionally a sector keyword like
@@ -91,6 +91,13 @@ while keeping the human in control of the final version.
 
 ## Roadmap
 
+**Focus:** Tailo does one thing and does it best: tailor a CV to a job while
+staying strictly true to the user's master CV. Honesty is the product. Job
+search and other side features are out of scope. Users are in the EU (Germany
+first), so data protection is a core requirement, not an add-on.
+
+### Shipped
+
 - [x] Core tailoring: master CV + job description → tailored CV
 - [x] Match scoring and gap analysis
 - [x] Generation history
@@ -99,28 +106,67 @@ while keeping the human in control of the final version.
 - [x] Settings page for the configurable PDF contact header
 - [x] User accounts and authentication: settings, master CVs, and history are
   per-user, so each signed-in user gets their own isolated workspace
-- [x] Find Jobs: CV-ranked job search via Adzuna, token-light by design
-- [~] Per-user rate limiting (in-memory limiter shipped; production-grade
-  Redis/Upstash backing still to do)
 - [x] Tailoring model upgraded to Claude Sonnet 5.5: in a pilot comparison it
   stayed truer to the master CV than Sonnet 4.6 and ran about 2.5x faster at
   similar cost
 - [x] Inline editor for the tailored CV; edits feed the PDF export and copy text
 - [x] One-line role headers in the PDF, with a notice when a company name had
   to be shortened
+- [x] Test suite and CI: unit, integration and offline eval tests on every PR
+- [~] Per-user rate limiting (in-memory limiter shipped; production-grade
+  Redis/Upstash backing still to do)
 - [~] Tailoring eval (`evals/tailor`): format, one-page and honesty checks plus a
   pairwise judge, for comparing models and prompts before shipping; full
   baseline run still to do
+
+### v1 launch (in priority order)
+
+The detailed plan for launching Tailo as a company across the EU, with every
+task, design and open decision, is in [LAUNCH_PLAN.md](LAUNCH_PLAN.md). In short:
+
+1. **Scope cleanup:** remove Find Jobs, the hardcoded personal header and the
+   hidden master CV creation
+2. **Company and legal:** entity, tax, Impressum, privacy policy, terms,
+   withdrawal rules for digital services, EU AI Act boundaries
+3. **EU data protection (GDPR):** data inventory, DPAs with every processor, EU
+   regions (Vercel functions in Frankfurt), no personal data in logs, retention,
+   data minimization in prompts
+4. **Input checks before any token is spent:** confirm extracted CV text, is it a
+   CV, is it a job description, language detection; a failed check costs nothing
+5. **Prompt injection defense:** normalization, pattern rules, hardened prompt
+   structure, and output grounding checks reused from the eval
+6. **Payments and credits:** VAT-handling provider, append-only ledger, atomic
+   spend, refunds on failure, webhook idempotency, free-allowance abuse limits
+7. **Run lifecycle and edge cases:** idempotent runs that survive disconnects,
+   retries, timeouts and parallel requests
+8. **Delete my account and export my data,** in one click each
+9. **Smarter token usage without lowering quality:** prompt caching of the
+   system prompt and master CV, identical-request reuse, measured with the eval
+10. **Security and operations:** global rate limiting, security headers,
+    migrations, tested backups, monitoring, spend caps, incident runbook
+11. **Landing page:** demo video, pricing, FAQ, legal footer, then a private beta
+
+### After launch
+
+- [ ] CV variants: two pages and a detailed version (academia, research,
+  medicine, senior management); templates for professions beyond software
+- [ ] Locales: German UI first, regional CV formats (Lebenslauf, UK CV, US
+  resume), A4 and local date formats per region
 - [ ] Prompt formatting rules: en dash date ranges, one line per education
   entry, a single Certifications line, names exactly as in the master CV
-- [ ] Save and track jobs found in search (currently results are live only)
-- [ ] One-click: tailor a CV directly from a Find Jobs result
-- [ ] Credits and payments: users buy credits and spend them per tailoring run
-- [ ] Embed the exact template fonts (Nunito, Spectral)
+- [ ] Embed the exact template fonts (Nunito, Spectral), which also fixes
+  non-Latin characters
+- [ ] Email magic link sign-in next to Google
+- [ ] Cover letter from the same verified facts
 - [ ] Structured education and projects in the data model
-- [ ] Company culture intelligence
 - [ ] Multi-version generation with different strategic angles
-- [ ] Semantic matching for large CVs
+
+### Out of scope
+
+- Find Jobs (Adzuna search): being removed
+- Company culture intelligence and semantic job matching
+- Selling to employers or recruiters to screen candidates (high-risk under the
+  EU AI Act)
 
 ## Local Development
 
