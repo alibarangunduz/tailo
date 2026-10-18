@@ -40,7 +40,7 @@ interface Ctx {
   rep: number;
 }
 
-interface Run {
+export interface Run {
   output: string;
   parsed: TailorResult | null;
   parseError?: string;
@@ -67,7 +67,7 @@ export async function loadCases(): Promise<EvalCase[]> {
 
 // Same shape check the UI relies on: everything tailored-result.tsx and the PDF
 // renderer read must be present with the right type.
-function validateResult(value: unknown): string | null {
+export function validateResult(value: unknown): string | null {
   const r = value as TailorResult;
   if (!r || typeof r !== "object") return "not an object";
   if (typeof r.matchScore !== "number") return "matchScore missing";
@@ -191,7 +191,7 @@ const loose = (s: string) =>
     .trim();
 
 // Section budget from the system prompt's One-Page Budget.
-function withinBudget(cv: TailoredCVContent): string | null {
+export function withinBudget(cv: TailoredCVContent): string | null {
   const bullets = cv.experience
     .flatMap((e) => e.subsections)
     .reduce((n, s) => n + s.bullets.length, 0);
@@ -206,7 +206,7 @@ const DATE_POINT = String.raw`(?:[A-Z][a-z]{2,8}\.? )?\d{4}`;
 const DATE_RANGE = new RegExp(
   String.raw`^${DATE_POINT} – (?:${DATE_POINT}|Present)$`,
 );
-function dateFormat(cv: TailoredCVContent): string | null {
+export function dateFormat(cv: TailoredCVContent): string | null {
   for (const e of cv.experience)
     if (e.dates && !DATE_RANGE.test(e.dates.trim()))
       return `experience dates "${e.dates}"`;
@@ -232,7 +232,7 @@ const educationEntries = (cv: TailoredCVContent) =>
 
 // One line per education entry, each carrying its years, and no more entries
 // than the master CV has.
-function educationFormat(cv: TailoredCVContent, master: string): string | null {
+export function educationFormat(cv: TailoredCVContent, master: string): string | null {
   const all = educationEntries(cv);
   const certs = all.filter(isCertifications);
   if (certs.length > 1) return `${certs.length} certifications lines`;
@@ -252,7 +252,7 @@ function educationFormat(cv: TailoredCVContent, master: string): string | null {
 // Company, job title and degree names must appear in the master CV as written.
 // Company names compare case-sensitively: the master CV's free-text notes can
 // mention a company in lowercase ("maon gmbh") without that being its name.
-function namesExact(cv: TailoredCVContent, master: string): string | null {
+export function namesExact(cv: TailoredCVContent, master: string): string | null {
   const m = loose(master);
   const dehyphen = (s: string) => s.replace(/[‐-―-]/g, " ");
   for (const e of cv.experience) {
@@ -271,7 +271,7 @@ function namesExact(cv: TailoredCVContent, master: string): string | null {
 }
 
 // Share of skill items (parentheticals stripped) that appear in the master CV.
-function skillsGrounded(cv: TailoredCVContent, master: string): number {
+export function skillsGrounded(cv: TailoredCVContent, master: string): number {
   const m = loose(master);
   const items = cv.skills
     .flatMap((s) => s.items.replace(/\([^)]*\)/g, "").split(","))

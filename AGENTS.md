@@ -90,6 +90,23 @@ be exported as a one-page, ATS-friendly PDF.
 - Tailwind CSS only — no CSS modules or styled-components.
 - Do not use double dashes ("--") in comments or strings; use commas or colons.
 
+## Testing
+
+- Vitest (`vitest.config.mts`): `npm test` must stay green before a commit;
+  CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests.
+- Tests live in `tests/` (`unit`, `integration`, `components`, `eval`). Mock only
+  the boundaries: `@/auth` (`tests/helpers/auth-mock.ts`), `@/lib/db`
+  (`tests/helpers/prisma-mock.ts`) and `@ai-sdk/anthropic` (fake models from
+  `tests/helpers/mock-model.ts`). Real route handlers, `streamText` and PDF
+  rendering should run.
+- New data route: `api-auth-guard.test.ts` covers its 401 automatically. Also add
+  a test that asserts its `where` clauses carry `userId` and that another user's
+  id returns 404. Only add a route to `PUBLIC_ROUTES` deliberately.
+- Test data is synthetic (`tests/fixtures/sample-cv.ts`). Never commit real CV
+  data; the real eval fixtures stay git-ignored.
+- Changing a prompt or the PDF layout: run `npm test` (offline graders and
+  one-page check), then the paid `npm run eval:tailor` before shipping.
+
 ## File Conventions
 
 - Components in `src/components/` with kebab-case filenames.
@@ -126,6 +143,8 @@ be exported as a one-page, ATS-friendly PDF.
   Windows → EPERM).
 - Neon: the connection string must include `?sslmode=require`.
 - PDF parsing must handle both the text-paste and file-upload paths.
+- npm 10.9 crashes with `Cannot read properties of null (reading 'edgesOut')`
+  when installing the Vitest toolchain; use `npx npm@11 install ...` instead.
 - `@react-pdf/renderer` must never be imported at module top level in a server or
   shared module; always dynamically import it on the client.
 - Next 16: the `middleware` file convention is renamed to `proxy` (see
